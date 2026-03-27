@@ -145,6 +145,7 @@ class ExpenseCategory(str, Enum):
     TRANSPORT = "transport"
     FOOD = "food"
     INTEREST_PAID = "interest_paid"
+    CHIT_FUND = "chit_fund"
     OTHER = "other"
 
 # Party (Ledger Account) Models
@@ -191,8 +192,9 @@ class InterestCalculation(BaseModel):
     account_id: str
     party_name: str
     principal: float
-    interest_rate: float
+    interest_rate: float  # Monthly rate
     days: int
+    months: float  # Days / 30 (always 30-day month)
     calculated_interest: float
     total_amount: float
 
@@ -263,6 +265,55 @@ class LedgerEntry(BaseModel):
     balance: float
     payment_mode: PaymentMode
     transaction_id: str
+
+# Chit Fund Models
+class ChitFundBase(BaseModel):
+    name: str  # Chit fund name
+    total_amount: float  # Total chit amount (e.g., 5,00,000)
+    monthly_installment: float  # Monthly payment amount
+    total_members: int  # Number of members
+    duration_months: int  # Total duration in months
+    start_date: str  # YYYY-MM-DD
+    organizer: Optional[str] = None  # Chit company/organizer name
+    note: Optional[str] = None
+
+class ChitFundCreate(ChitFundBase):
+    pass
+
+class ChitFund(ChitFundBase):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    is_active: bool = True
+    is_won: bool = False  # Has user won the chit?
+    won_month: Optional[int] = None  # Which month user won
+    won_amount: Optional[float] = None  # Amount received when won
+    total_paid: float = 0.0  # Total installments paid so far
+    payments_count: int = 0  # Number of payments made
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class ChitFundUpdate(BaseModel):
+    name: Optional[str] = None
+    organizer: Optional[str] = None
+    note: Optional[str] = None
+    is_active: Optional[bool] = None
+
+# Chit Fund Payment Record
+class ChitPaymentBase(BaseModel):
+    chit_id: str
+    month_number: int  # Which month's payment (1, 2, 3...)
+    amount: float
+    payment_date: str  # YYYY-MM-DD
+    payment_mode: PaymentMode
+    note: Optional[str] = None
+
+class ChitPaymentCreate(ChitPaymentBase):
+    pass
+
+class ChitPayment(ChitPaymentBase):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    transaction_id: Optional[str] = None  # Link to cash book
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 # Staff APIs
 @api_router.post("/staff", response_model=Staff)
@@ -637,10 +688,14 @@ async def calculate_interest(account_id: str, end_date: Optional[str] = None):
     if days < 0:
         days = 0
     
-    # Simple interest calculation: P * R * T / 365
+    # MONTHLY INTEREST CALCULATION (30-day basis)
+    # 1 month = 30 days (always, regardless of actual month days)
+    # Formula: Principal × Monthly Rate × Months / 100
+    # Where Months = Days / 30
     principal = account["principal_amount"]
-    rate = account["interest_rate"]
-    interest = (principal * rate * days) / (365 * 100)
+    rate = account["interest_rate"]  # This is MONTHLY rate
+    months = days / 30  # Always 30-day month basis
+    interest = (principal * rate * months) / 100
     
     return InterestCalculation(
         account_id=account_id,
@@ -648,13 +703,14 @@ async def calculate_interest(account_id: str, end_date: Optional[str] = None):
         principal=principal,
         interest_rate=rate,
         days=days,
+        months=round(months, 2),
         calculated_interest=round(interest, 2),
         total_amount=round(principal + interest, 2)
     )
 
 @api_router.post("/interest-accounts/{account_id}/add-to-cashbook")
 async def add_interest_to_cashbook(account_id: str, end_date: Optional[str] = None):
-    """Add calculated interest to cash book and party ledger"""
+    """Add calculated interest to cash book and party ledger (30-day monthly basis)"""
     account = await db.interest_accounts.find_one({"id": account_id}, {"_id": 0})
     if not account:
         raise HTTPException(status_code=404, detail="Interest account not found")
@@ -663,14 +719,15 @@ async def add_interest_to_cashbook(account_id: str, end_date: Optional[str] = No
     if not party:
         raise HTTPException(status_code=404, detail="Party not found")
     
-    # Calculate interest
+    # Calculate interest (30-day monthly basis)
     start = datetime.strptime(account["start_date"], "%Y-%m-%d")
     end = datetime.strptime(end_date, "%Y-%m-%d") if end_date else datetime.now(timezone.utc)
     days = max(0, (end - start).days)
     
     principal = account["principal_amount"]
-    rate = account["interest_rate"]
-    interest = round((principal * rate * days) / (365 * 100), 2)
+    rate = account["interest_rate"]  # Monthly rate
+    months = days / 30  # Always 30-day month
+    interest = round((principal * rate * months) / 100, 2)
     
     if interest <= 0:
         raise HTTPException(status_code=400, detail="No interest to add")
@@ -684,7 +741,7 @@ async def add_interest_to_cashbook(account_id: str, end_date: Optional[str] = No
         transaction_type=TransactionType.DEBIT,
         amount=interest,
         payment_mode=PaymentMode.CASH,
-        description=f"Interest (Byaj) @ {rate}% for {days} days on ₹{principal}",
+        description=f"Byaj @ {rate}%/month for {round(months, 2)} months ({days} days) on ₹{principal}",
         category=ExpenseCategory.INTEREST_PAID,
         reference_id=account_id,
         reference_type="interest"
@@ -1041,6 +1098,200 @@ async def get_payment_mode_report(month: str):
     return {
         "month": month,
         "by_payment_mode": dict(mode_data)
+    }
+
+# ==================== CHIT FUND APIs ====================
+
+@api_router.post("/chit-funds", response_model=ChitFund)
+async def create_chit_fund(chit: ChitFundCreate):
+    chit_obj = ChitFund(**chit.model_dump())
+    doc = chit_obj.model_dump()
+    await db.chit_funds.insert_one(doc)
+    return chit_obj
+
+@api_router.get("/chit-funds", response_model=List[ChitFund])
+async def get_all_chit_funds():
+    chits = await db.chit_funds.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return chits
+
+@api_router.get("/chit-funds/{chit_id}", response_model=ChitFund)
+async def get_chit_fund(chit_id: str):
+    chit = await db.chit_funds.find_one({"id": chit_id}, {"_id": 0})
+    if not chit:
+        raise HTTPException(status_code=404, detail="Chit fund not found")
+    return chit
+
+@api_router.put("/chit-funds/{chit_id}", response_model=ChitFund)
+async def update_chit_fund(chit_id: str, chit_update: ChitFundUpdate):
+    update_data = {k: v for k, v in chit_update.model_dump().items() if v is not None}
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No update data provided")
+    
+    result = await db.chit_funds.update_one({"id": chit_id}, {"$set": update_data})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Chit fund not found")
+    
+    updated = await db.chit_funds.find_one({"id": chit_id}, {"_id": 0})
+    return updated
+
+@api_router.delete("/chit-funds/{chit_id}")
+async def delete_chit_fund(chit_id: str):
+    # Check if chit has payments
+    payment_count = await db.chit_payments.count_documents({"chit_id": chit_id})
+    if payment_count > 0:
+        raise HTTPException(status_code=400, detail=f"Cannot delete chit with {payment_count} payments")
+    
+    result = await db.chit_funds.delete_one({"id": chit_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Chit fund not found")
+    return {"message": "Chit fund deleted"}
+
+# Pay Chit Installment
+@api_router.post("/chit-funds/{chit_id}/pay", response_model=ChitPayment)
+async def pay_chit_installment(chit_id: str, payment: ChitPaymentCreate):
+    """Pay monthly chit installment - auto-links to cash book"""
+    chit = await db.chit_funds.find_one({"id": chit_id}, {"_id": 0})
+    if not chit:
+        raise HTTPException(status_code=404, detail="Chit fund not found")
+    
+    # Check if this month's payment already exists
+    existing = await db.chit_payments.find_one({
+        "chit_id": chit_id,
+        "month_number": payment.month_number
+    })
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Payment for month {payment.month_number} already exists")
+    
+    # Create payment record
+    payment_obj = ChitPayment(**payment.model_dump())
+    
+    # Auto-create transaction in cash book (Debit - money going out)
+    txn = Transaction(
+        date=payment.payment_date,
+        transaction_type=TransactionType.DEBIT,
+        amount=payment.amount,
+        payment_mode=payment.payment_mode,
+        description=f"Chit Fund: {chit['name']} - Month {payment.month_number} Installment",
+        category=ExpenseCategory.CHIT_FUND,
+        reference_id=chit_id,
+        reference_type="chit_payment"
+    )
+    await db.transactions.insert_one(txn.model_dump())
+    payment_obj.transaction_id = txn.id
+    
+    # Save payment
+    await db.chit_payments.insert_one(payment_obj.model_dump())
+    
+    # Update chit fund totals
+    await db.chit_funds.update_one(
+        {"id": chit_id},
+        {
+            "$inc": {"total_paid": payment.amount, "payments_count": 1}
+        }
+    )
+    
+    return payment_obj
+
+# Get Chit Payments
+@api_router.get("/chit-funds/{chit_id}/payments", response_model=List[ChitPayment])
+async def get_chit_payments(chit_id: str):
+    payments = await db.chit_payments.find(
+        {"chit_id": chit_id}, {"_id": 0}
+    ).sort("month_number", 1).to_list(1000)
+    return payments
+
+# Mark Chit as Won
+@api_router.post("/chit-funds/{chit_id}/win")
+async def mark_chit_won(chit_id: str, won_month: int, won_amount: float, payment_mode: PaymentMode = PaymentMode.BANK_TRANSFER):
+    """Mark chit as won and add credit entry to cash book"""
+    chit = await db.chit_funds.find_one({"id": chit_id}, {"_id": 0})
+    if not chit:
+        raise HTTPException(status_code=404, detail="Chit fund not found")
+    
+    if chit.get("is_won"):
+        raise HTTPException(status_code=400, detail="Chit already marked as won")
+    
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    
+    # Create credit transaction (money coming in)
+    txn = Transaction(
+        date=today,
+        transaction_type=TransactionType.CREDIT,
+        amount=won_amount,
+        payment_mode=payment_mode,
+        description=f"Chit Fund Won: {chit['name']} - Month {won_month}",
+        category=None,
+        reference_id=chit_id,
+        reference_type="chit_won"
+    )
+    await db.transactions.insert_one(txn.model_dump())
+    
+    # Update chit fund
+    await db.chit_funds.update_one(
+        {"id": chit_id},
+        {
+            "$set": {
+                "is_won": True,
+                "won_month": won_month,
+                "won_amount": won_amount
+            }
+        }
+    )
+    
+    return {
+        "message": "Chit marked as won",
+        "chit_name": chit["name"],
+        "won_month": won_month,
+        "won_amount": won_amount,
+        "transaction_id": txn.id
+    }
+
+# Delete Chit Payment
+@api_router.delete("/chit-payments/{payment_id}")
+async def delete_chit_payment(payment_id: str):
+    payment = await db.chit_payments.find_one({"id": payment_id}, {"_id": 0})
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    
+    # Delete linked transaction
+    if payment.get("transaction_id"):
+        await db.transactions.delete_one({"id": payment["transaction_id"]})
+    
+    # Update chit fund totals
+    await db.chit_funds.update_one(
+        {"id": payment["chit_id"]},
+        {
+            "$inc": {"total_paid": -payment["amount"], "payments_count": -1}
+        }
+    )
+    
+    await db.chit_payments.delete_one({"id": payment_id})
+    return {"message": "Payment deleted"}
+
+# Chit Fund Summary
+@api_router.get("/chit-funds/summary/all")
+async def get_chit_summary():
+    chits = await db.chit_funds.find({}, {"_id": 0}).to_list(1000)
+    
+    active_chits = [c for c in chits if c.get("is_active", True)]
+    completed_chits = [c for c in chits if not c.get("is_active", True)]
+    won_chits = [c for c in chits if c.get("is_won", False)]
+    
+    total_invested = sum(c.get("total_paid", 0) for c in chits)
+    total_won = sum(c.get("won_amount", 0) for c in won_chits)
+    total_remaining = sum(
+        (c["monthly_installment"] * c["duration_months"]) - c.get("total_paid", 0) 
+        for c in active_chits
+    )
+    
+    return {
+        "total_chits": len(chits),
+        "active_chits": len(active_chits),
+        "won_chits": len(won_chits),
+        "total_invested": total_invested,
+        "total_won": total_won,
+        "total_remaining": total_remaining,
+        "net_position": total_won - total_invested
     }
 
 # Include the router

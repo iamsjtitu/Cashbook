@@ -51,6 +51,7 @@ const AccountingReports = () => {
     { key: "transport", label: "Transport", color: "bg-indigo-500" },
     { key: "food", label: "Food", color: "bg-pink-500" },
     { key: "interest_paid", label: "Interest", color: "bg-amber-500" },
+    { key: "chit_fund", label: "Chit Fund", color: "bg-violet-500" },
     { key: "other", label: "Other", color: "bg-gray-500" }
   ];
 

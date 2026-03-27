@@ -17,6 +17,7 @@ const CATEGORIES = [
   { value: "transport", label: "Transport", color: "bg-indigo-100 text-indigo-700" },
   { value: "food", label: "Food", color: "bg-pink-100 text-pink-700" },
   { value: "interest_paid", label: "Interest Paid", color: "bg-amber-100 text-amber-700" },
+  { value: "chit_fund", label: "Chit Fund", color: "bg-violet-100 text-violet-700" },
   { value: "other", label: "Other", color: "bg-gray-100 text-gray-700" }
 ];
 
