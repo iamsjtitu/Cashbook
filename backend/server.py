@@ -99,6 +99,28 @@ class AppVersion(BaseModel):
     release_notes: str
     release_date: str
 
+# Advance Models
+class AdvanceBase(BaseModel):
+    staff_id: str
+    amount: float
+    date: str  # YYYY-MM-DD
+    note: Optional[str] = None
+
+class AdvanceCreate(AdvanceBase):
+    pass
+
+class Advance(AdvanceBase):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+# Advance Summary for Monthly Report
+class AdvanceSummary(BaseModel):
+    staff_id: str
+    staff_name: str
+    total_advance: float
+    advance_count: int
+
 # Staff APIs
 @api_router.post("/staff", response_model=Staff)
 async def create_staff(staff: StaffCreate):
@@ -271,6 +293,67 @@ async def update_app_version(version: AppVersion):
     await db.app_version.delete_many({})
     await db.app_version.insert_one(version.model_dump())
     return version
+
+# Advance APIs
+@api_router.post("/advances", response_model=Advance)
+async def create_advance(advance: AdvanceCreate):
+    # Verify staff exists
+    staff = await db.staff.find_one({"id": advance.staff_id}, {"_id": 0})
+    if not staff:
+        raise HTTPException(status_code=404, detail="Staff not found")
+    
+    advance_obj = Advance(**advance.model_dump())
+    doc = advance_obj.model_dump()
+    await db.advances.insert_one(doc)
+    return advance_obj
+
+@api_router.get("/advances", response_model=List[Advance])
+async def get_all_advances():
+    advances = await db.advances.find({}, {"_id": 0}).sort("date", -1).to_list(1000)
+    return advances
+
+@api_router.get("/advances/{staff_id}", response_model=List[Advance])
+async def get_staff_advances(staff_id: str):
+    advances = await db.advances.find({"staff_id": staff_id}, {"_id": 0}).sort("date", -1).to_list(1000)
+    return advances
+
+@api_router.get("/advances/month/{month}", response_model=List[Advance])
+async def get_advances_by_month(month: str):
+    # month format: YYYY-MM
+    advances = await db.advances.find({
+        "date": {"$regex": f"^{month}"}
+    }, {"_id": 0}).sort("date", -1).to_list(1000)
+    return advances
+
+@api_router.delete("/advances/{advance_id}")
+async def delete_advance(advance_id: str):
+    result = await db.advances.delete_one({"id": advance_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Advance not found")
+    return {"message": "Advance deleted successfully"}
+
+@api_router.get("/advances/summary/{month}", response_model=List[AdvanceSummary])
+async def get_advance_summary(month: str):
+    # Get all staff
+    staff_list = await db.staff.find({}, {"_id": 0}).to_list(1000)
+    
+    # Get advances for the month
+    advances = await db.advances.find({
+        "date": {"$regex": f"^{month}"}
+    }, {"_id": 0}).to_list(1000)
+    
+    summaries = []
+    for staff in staff_list:
+        staff_advances = [a for a in advances if a["staff_id"] == staff["id"]]
+        total = sum(a["amount"] for a in staff_advances)
+        summaries.append(AdvanceSummary(
+            staff_id=staff["id"],
+            staff_name=staff["name"],
+            total_advance=total,
+            advance_count=len(staff_advances)
+        ))
+    
+    return summaries
 
 # Root API
 @api_router.get("/")

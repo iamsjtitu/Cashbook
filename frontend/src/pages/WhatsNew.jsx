@@ -1,128 +1,45 @@
-import { useState, useEffect } from "react";
-import axios from "axios";
-import { API } from "@/App";
-import { X, Sparkles, Rocket } from "lucide-react";
 import { format } from "date-fns";
 
 const WhatsNew = ({ onClose }) => {
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetchWhatsNew();
-  }, []);
-
-  const fetchWhatsNew = async () => {
-    try {
-      const response = await axios.get(`${API}/whats-new`);
-      if (response.data.length === 0) {
-        // Add default items if none exist
-        setItems([
-          {
-            id: "1",
-            version: "1.0.0",
-            title: "Initial Release",
-            description: "Staff Attendance & Salary Management App launched with core features including staff management, attendance tracking, and salary calculation.",
-            date: format(new Date(), "yyyy-MM-dd"),
-          },
-          {
-            id: "2",
-            version: "1.0.0",
-            title: "Salary Calculation",
-            description: "All salaries are calculated on a 30-day basis regardless of actual month days. Half day = Daily Rate ÷ 2.",
-            date: format(new Date(), "yyyy-MM-dd"),
-          },
-          {
-            id: "3",
-            version: "1.0.0",
-            title: "Attendance Tracking",
-            description: "Mark attendance as Present, Absent, or Half Day. Visual calendar view with color-coded status.",
-            date: format(new Date(), "yyyy-MM-dd"),
-          },
-        ]);
-      } else {
-        setItems(response.data);
-      }
-    } catch (error) {
-      // Default items on error
-      setItems([
-        {
-          id: "1",
-          version: "1.0.0",
-          title: "Welcome to Staff Manager",
-          description: "Your complete staff attendance and salary management solution.",
-          date: format(new Date(), "yyyy-MM-dd"),
-        },
-      ]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const items = [
+    { id: "1", version: "1.0.0", title: "Staff Manager Launch", description: "Complete staff attendance and salary management system with 30-day calculation basis.", date: format(new Date(), "yyyy-MM-dd") },
+    { id: "2", version: "1.0.0", title: "Attendance Calendar", description: "Mark attendance with Present, Absent, Half Day options. Visual calendar view.", date: format(new Date(), "yyyy-MM-dd") },
+    { id: "3", version: "1.0.0", title: "Salary Calculator", description: "Auto calculate salary: Daily = Monthly ÷ 30, Half Day = Daily ÷ 2", date: format(new Date(), "yyyy-MM-dd") },
+    { id: "4", version: "1.0.0", title: "Monthly Reports", description: "View all staff attendance and salary summary for any month.", date: format(new Date(), "yyyy-MM-dd") },
+    { id: "5", version: "1.0.0", title: "Advance Management", description: "Track advance payments given to staff.", date: format(new Date(), "yyyy-MM-dd") },
+  ];
 
   return (
-    <div className="modal-overlay" onClick={onClose} data-testid="whats-new-modal">
-      <div
-        className="modal-content max-w-lg animate-fade-in"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="modal-header bg-[#002FA7] text-white border-b-0">
-          <div className="flex items-center gap-2">
-            <Sparkles size={24} />
-            <span>What's New</span>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" style={{ maxWidth: '450px' }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header" style={{ background: '#FF6B35', color: 'white' }}>
+          <div className="modal-title flex items-center gap-2">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            What's New
           </div>
-          <button
-            onClick={onClose}
-            className="p-1 hover:bg-white/20 transition-colors rounded"
-            data-testid="close-whats-new-btn"
-          >
-            <X size={24} />
-          </button>
+          <button className="modal-close text-white" onClick={onClose}>&times;</button>
         </div>
-
-        <div className="modal-body p-0 max-h-[60vh] overflow-auto">
-          {loading ? (
-            <div className="p-8 text-center">Loading...</div>
-          ) : (
-            <div>
-              {items.map((item, index) => (
-                <div
-                  key={item.id}
-                  className={`p-6 ${index !== items.length - 1 ? "border-b border-black" : ""}`}
-                >
-                  <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 bg-black text-white flex items-center justify-center flex-shrink-0">
-                      <Rocket size={20} />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-bold bg-[#002FA7] text-white px-2 py-0.5">
-                          v{item.version}
-                        </span>
-                        <span className="text-xs text-gray-500">
-                          {format(new Date(item.date), "dd MMM yyyy")}
-                        </span>
-                      </div>
-                      <h3 className="font-bold text-lg mb-1" style={{ fontFamily: 'Chivo, sans-serif' }}>
-                        {item.title}
-                      </h3>
-                      <p className="text-gray-600 text-sm">{item.description}</p>
-                    </div>
-                  </div>
+        <div className="modal-body p-0 max-h-96 overflow-auto">
+          {items.map((item, index) => (
+            <div key={item.id} className={`p-4 ${index !== items.length - 1 ? 'border-b border-gray-100' : ''}`}>
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded bg-orange-100 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                 </div>
-              ))}
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-semibold bg-orange-100 text-orange-600 px-2 py-0.5 rounded">v{item.version}</span>
+                    <span className="text-xs text-gray-400">{format(new Date(item.date), "dd MMM yyyy")}</span>
+                  </div>
+                  <div className="font-semibold text-gray-800 text-sm">{item.title}</div>
+                  <div className="text-gray-500 text-xs mt-0.5">{item.description}</div>
+                </div>
+              </div>
             </div>
-          )}
+          ))}
         </div>
-
-        <div className="p-4 bg-gray-50 border-t-2 border-black">
-          <div className="flex items-center justify-between">
-            <div className="text-xs text-gray-500">
-              <strong>Current Version:</strong> 1.0.0
-            </div>
-            <div className="text-xs text-gray-500">
-              Auto-update enabled
-            </div>
-          </div>
+        <div className="p-3 bg-gray-50 text-center border-t">
+          <div className="text-xs text-gray-500">Current Version: <span className="font-semibold text-orange-500">v1.0.0</span> | Auto-update enabled</div>
         </div>
       </div>
     </div>

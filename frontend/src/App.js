@@ -8,38 +8,28 @@ import Dashboard from "@/pages/Dashboard";
 import StaffList from "@/pages/StaffList";
 import Attendance from "@/pages/Attendance";
 import SalaryCalculator from "@/pages/SalaryCalculator";
+import MonthlyReport from "@/pages/MonthlyReport";
+import Advance from "@/pages/Advance";
 import WhatsNew from "@/pages/WhatsNew";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 export const API = `${BACKEND_URL}/api`;
 
 // Error Boundary
 class ErrorBoundary extends Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false };
   }
-
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error };
+  static getDerivedStateFromError() {
+    return { hasError: true };
   }
-
-  componentDidCatch(error, errorInfo) {
-    console.error("Error caught:", error, errorInfo);
-  }
-
   render() {
     if (this.state.hasError) {
       return (
         <div className="p-8 text-center">
           <h2 className="text-xl font-bold text-red-600">Something went wrong</h2>
-          <p className="mt-2 text-gray-600">{this.state.error?.message}</p>
-          <button 
-            onClick={() => window.location.reload()} 
-            className="mt-4 btn-primary"
-          >
-            Reload
-          </button>
+          <button onClick={() => window.location.reload()} className="btn btn-primary mt-4">Reload</button>
         </div>
       );
     }
@@ -47,82 +37,114 @@ class ErrorBoundary extends Component {
   }
 }
 
-// Sidebar Navigation
-const Sidebar = ({ onWhatsNewClick }) => {
-  const location = useLocation();
-
+// Top Header
+const TopHeader = ({ onWhatsNewClick }) => {
   return (
-    <aside className="sidebar">
-      <div className="sidebar-header">
-        <h1 className="text-xl font-black tracking-tighter" style={{ fontFamily: 'Chivo, sans-serif' }}>
-          STAFF MANAGER
-        </h1>
-        <p className="text-xs text-gray-500 mt-1 uppercase tracking-widest">Attendance & Salary</p>
+    <header className="top-header">
+      <div className="company-info">
+        <div className="company-name">STAFF MANAGER</div>
+        <div className="company-location">Attendance & Salary System</div>
       </div>
       
-      <nav className="sidebar-nav">
-        <NavLink
-          to="/"
-          className={`nav-item ${location.pathname === '/' ? 'active' : ''}`}
-          data-testid="nav-dashboard"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-          <span>Dashboard</span>
-        </NavLink>
+      <div className="header-actions">
+        <div className="header-btn">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          2025-2026
+        </div>
         
-        <NavLink
-          to="/staff"
-          className={`nav-item ${location.pathname === '/staff' ? 'active' : ''}`}
-          data-testid="nav-staff"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          <span>Staff</span>
-        </NavLink>
-        
-        <NavLink
-          to="/attendance"
-          className={`nav-item ${location.pathname === '/attendance' ? 'active' : ''}`}
-          data-testid="nav-attendance"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
-          <span>Attendance</span>
-        </NavLink>
-        
-        <NavLink
-          to="/salary"
-          className={`nav-item ${location.pathname === '/salary' ? 'active' : ''}`}
-          data-testid="nav-salary"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></svg>
-          <span>Salary</span>
-        </NavLink>
-      </nav>
+        <div className="header-btn">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+          </svg>
+          admin
+          <span className="admin-badge">ADMIN</span>
+        </div>
 
-      <div className="p-4 border-t-2 border-black">
-        <button
-          onClick={onWhatsNewClick}
-          className="w-full flex items-center gap-2 px-4 py-3 bg-[#002FA7] text-white hover:bg-black transition-colors"
-          data-testid="whats-new-btn"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
-          <span className="font-medium">What's New</span>
+        <button className="header-btn" onClick={onWhatsNewClick}>
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </button>
+        
+        <div className="version-badge">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          v1.0.0
+        </div>
+        
+        <button className="header-btn">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+          </svg>
+          Print
         </button>
       </div>
-    </aside>
+    </header>
   );
 };
 
-// Layout wrapper
-const Layout = ({ children, onWhatsNewClick }) => {
+// Main Navigation
+const MainNav = () => {
+  const location = useLocation();
+  
   return (
-    <div className="app-container flex">
-      <Sidebar onWhatsNewClick={onWhatsNewClick} />
-      <main className="main-content flex-1 overflow-auto">
-        <ErrorBoundary>
-          {children}
-        </ErrorBoundary>
-      </main>
-    </div>
+    <nav className="main-nav">
+      <NavLink to="/" className={`nav-item ${location.pathname === '/' ? 'active' : ''}`}>
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+        </svg>
+        Dashboard
+      </NavLink>
+      
+      <NavLink to="/staff" className={`nav-item ${location.pathname === '/staff' ? 'active' : ''}`}>
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+        </svg>
+        Staff Master
+      </NavLink>
+      
+      <NavLink to="/attendance" className={`nav-item ${location.pathname === '/attendance' ? 'active' : ''}`}>
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+        </svg>
+        Attendance
+      </NavLink>
+      
+      <NavLink to="/salary" className={`nav-item ${location.pathname === '/salary' ? 'active' : ''}`}>
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        Salary Payment
+      </NavLink>
+      
+      <NavLink to="/report" className={`nav-item ${location.pathname === '/report' ? 'active' : ''}`}>
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        Monthly Report
+      </NavLink>
+      
+      <NavLink to="/advance" className={`nav-item ${location.pathname === '/advance' ? 'active' : ''}`}>
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+        </svg>
+        Advance
+      </NavLink>
+    </nav>
+  );
+};
+
+// Footer
+const Footer = () => {
+  return (
+    <footer className="app-footer">
+      <div className="footer-title">Staff Manager - <span>Attendance & Salary System</span></div>
+      <div className="footer-info">Salary = Monthly ÷ 30 days | Half Day = Daily ÷ 2</div>
+      <div className="footer-credits">v1.0.0 | Built with Emergent</div>
+    </footer>
   );
 };
 
@@ -130,23 +152,28 @@ function App() {
   const [showWhatsNew, setShowWhatsNew] = useState(false);
 
   return (
-    <div className="App">
+    <div className="app-container">
       <ErrorBoundary>
         <BrowserRouter>
-          <Layout onWhatsNewClick={() => setShowWhatsNew(true)}>
+          <TopHeader onWhatsNewClick={() => setShowWhatsNew(true)} />
+          <MainNav />
+          
+          <div className="content-area">
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/staff" element={<StaffList />} />
               <Route path="/attendance" element={<Attendance />} />
               <Route path="/salary" element={<SalaryCalculator />} />
+              <Route path="/report" element={<MonthlyReport />} />
+              <Route path="/advance" element={<Advance />} />
             </Routes>
-          </Layout>
+          </div>
           
-          {showWhatsNew && (
-            <WhatsNew onClose={() => setShowWhatsNew(false)} />
-          )}
+          <Footer />
+          
+          {showWhatsNew && <WhatsNew onClose={() => setShowWhatsNew(false)} />}
         </BrowserRouter>
-        <Toaster position="top-right" />
+        <Toaster position="top-right" richColors />
       </ErrorBoundary>
     </div>
   );

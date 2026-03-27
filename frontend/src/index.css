@@ -1,62 +1,56 @@
-@import url('https://fonts.googleapis.com/css2?family=Chivo:wght@300;400;500;600;700;900&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-    --background: #FFFFFF;
-    --surface: #F9FAFB;
-    --surface-hover: #F3F4F6;
-    --border-color: #000000;
-    --text-primary: #000000;
-    --text-secondary: #4B5563;
-    --primary: #002FA7;
-    --primary-hover: #00247D;
-    --status-present: #000000;
-    --status-absent: #E32636;
-    --status-half-day: #FFD700;
+    --primary: #FF6B35;
+    --primary-dark: #E85A2A;
+    --success: #28A745;
+    --danger: #DC3545;
+    --warning: #FFC107;
+    --info: #17A2B8;
+    --light-bg: #F0F4F8;
+    --white: #FFFFFF;
+    --text-dark: #333333;
+    --text-muted: #6C757D;
+    --border: #DEE2E6;
+}
+
+* {
+    font-family: 'Poppins', sans-serif;
 }
 
 body {
     margin: 0;
-    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: var(--light-bg);
+    color: var(--text-dark);
     -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    background-color: var(--background);
-    color: var(--text-primary);
-}
-
-h1, h2, h3, h4, h5, h6 {
-    font-family: 'Chivo', sans-serif;
-}
-
-code {
-    font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New", monospace;
 }
 
 @layer base {
     :root {
-        --background: 0 0% 100%;
-        --foreground: 0 0% 0%;
+        --background: 210 20% 96%;
+        --foreground: 0 0% 20%;
         --card: 0 0% 100%;
-        --card-foreground: 0 0% 0%;
+        --card-foreground: 0 0% 20%;
         --popover: 0 0% 100%;
-        --popover-foreground: 0 0% 0%;
-        --primary: 224 100% 33%;
+        --popover-foreground: 0 0% 20%;
+        --primary: 18 100% 60%;
         --primary-foreground: 0 0% 100%;
-        --secondary: 0 0% 96%;
-        --secondary-foreground: 0 0% 0%;
-        --muted: 0 0% 96%;
+        --secondary: 210 10% 96%;
+        --secondary-foreground: 0 0% 20%;
+        --muted: 210 10% 96%;
         --muted-foreground: 0 0% 45%;
-        --accent: 0 0% 96%;
-        --accent-foreground: 0 0% 0%;
-        --destructive: 355 78% 52%;
+        --accent: 210 10% 96%;
+        --accent-foreground: 0 0% 20%;
+        --destructive: 0 70% 55%;
         --destructive-foreground: 0 0% 100%;
-        --border: 0 0% 0%;
-        --input: 0 0% 0%;
-        --ring: 224 100% 33%;
-        --radius: 0px;
+        --border: 210 15% 88%;
+        --input: 210 15% 88%;
+        --ring: 18 100% 60%;
+        --radius: 8px;
     }
 }
 
@@ -64,118 +58,25 @@ code {
     * {
         @apply border-border;
     }
-    body {
-        @apply bg-background text-foreground;
-    }
 }
 
-/* Custom scrollbar */
+/* Scrollbar */
 ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-    background: var(--surface);
-    border-left: 1px solid var(--border-color);
+    background: #f1f1f1;
 }
 
 ::-webkit-scrollbar-thumb {
-    background: var(--text-secondary);
+    background: #c1c1c1;
+    border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: var(--text-primary);
-}
-
-/* Input focus styles */
-input:focus, select:focus, textarea:focus {
-    outline: none;
-    border-color: var(--primary) !important;
-}
-
-/* Table styles */
-.data-table {
-    width: 100%;
-    border-collapse: collapse;
-    border: 2px solid var(--border-color);
-}
-
-.data-table th {
-    border-bottom: 2px solid var(--border-color);
-    text-transform: uppercase;
-    font-size: 0.75rem;
-    letter-spacing: 0.1em;
-    font-weight: 700;
-    padding: 1rem;
-    text-align: left;
-    font-family: 'Chivo', sans-serif;
-}
-
-.data-table td {
-    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-    padding: 1rem;
-}
-
-/* Status badges */
-.status-present {
-    background-color: var(--status-present);
-    color: white;
-}
-
-.status-absent {
-    background-color: var(--status-absent);
-    color: white;
-}
-
-.status-half-day {
-    background-color: var(--status-half-day);
-    color: black;
-}
-
-/* Button styles */
-.btn-primary {
-    background-color: var(--primary);
-    color: white;
-    border: 2px solid var(--primary);
-    padding: 0.5rem 1.5rem;
-    font-weight: 500;
-    letter-spacing: 0.025em;
-    transition: all 0.2s ease-in-out;
-}
-
-.btn-primary:hover {
-    background-color: black;
-    border-color: black;
-}
-
-.btn-secondary {
-    background-color: white;
-    color: black;
-    border: 2px solid black;
-    padding: 0.5rem 1.5rem;
-    font-weight: 500;
-    letter-spacing: 0.025em;
-    transition: all 0.2s ease-in-out;
-}
-
-.btn-secondary:hover {
-    background-color: black;
-    color: white;
-}
-
-.btn-danger {
-    background-color: white;
-    color: var(--status-absent);
-    border: 2px solid var(--status-absent);
-    padding: 0.5rem 1.5rem;
-    font-weight: 500;
-    transition: all 0.2s ease-in-out;
-}
-
-.btn-danger:hover {
-    background-color: var(--status-absent);
-    color: white;
+    background: #a1a1a1;
 }
 
 @layer base {

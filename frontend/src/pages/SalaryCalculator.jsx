@@ -2,14 +2,8 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import { API } from "@/App";
 import { toast } from "sonner";
-import { Calculator, Printer, ChevronRight } from "lucide-react";
 import { format, subMonths } from "date-fns";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 const SalaryCalculator = () => {
   const [staffList, setStaffList] = useState([]);
@@ -19,30 +13,22 @@ const SalaryCalculator = () => {
   const [loading, setLoading] = useState(true);
   const [calculating, setCalculating] = useState(false);
 
-  // Generate last 12 months
   const getMonthOptions = () => {
     const months = [];
     for (let i = 0; i < 12; i++) {
       const date = subMonths(new Date(), i);
-      months.push({
-        value: format(date, "yyyy-MM"),
-        label: format(date, "MMMM yyyy"),
-      });
+      months.push({ value: format(date, "yyyy-MM"), label: format(date, "MMMM yyyy") });
     }
     return months;
   };
 
-  useEffect(() => {
-    fetchStaff();
-  }, []);
+  useEffect(() => { fetchStaff(); }, []);
 
   const fetchStaff = async () => {
     try {
       const response = await axios.get(`${API}/staff`);
       setStaffList(response.data);
-      if (response.data.length > 0) {
-        setSelectedStaff(response.data[0]);
-      }
+      if (response.data.length > 0) setSelectedStaff(response.data[0]);
     } catch (error) {
       toast.error("Failed to fetch staff");
     } finally {
@@ -52,7 +38,6 @@ const SalaryCalculator = () => {
 
   const calculateSalary = async () => {
     if (!selectedStaff) return;
-    
     setCalculating(true);
     try {
       const response = await axios.get(`${API}/salary/${selectedStaff.id}/${selectedMonth}`);
@@ -64,219 +49,109 @@ const SalaryCalculator = () => {
     }
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
-
   const monthOptions = getMonthOptions();
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-lg font-medium">Loading...</div>
-      </div>
-    );
-  }
+  if (loading) return <div className="text-center py-8">Loading...</div>;
 
   return (
-    <div data-testid="salary-page">
-      <header className="page-header">
-        <h1 className="page-title">Salary Calculator</h1>
-        <p className="page-subtitle">Calculate monthly salary based on attendance</p>
-      </header>
+    <div data-testid="salary-page" className="animate-fade-in">
+      {/* Action Bar */}
+      <div className="action-bar">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="dropdown-trigger" data-testid="salary-staff-selector">
+              <div className="staff-avatar w-6 h-6 text-xs">{selectedStaff?.name.charAt(0)}</div>
+              <span className="font-medium">{selectedStaff?.name}</span>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="bg-white rounded-lg shadow-lg border">
+            {staffList.map((staff) => (
+              <DropdownMenuItem key={staff.id} onClick={() => { setSelectedStaff(staff); setSalaryData(null); }} className="cursor-pointer hover:bg-gray-50 px-3 py-2">
+                {staff.name}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="dropdown-trigger" data-testid="month-selector">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+              <span className="font-medium">{monthOptions.find(m => m.value === selectedMonth)?.label}</span>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="bg-white rounded-lg shadow-lg border max-h-60 overflow-auto">
+            {monthOptions.map((month) => (
+              <DropdownMenuItem key={month.value} onClick={() => { setSelectedMonth(month.value); setSalaryData(null); }} className="cursor-pointer hover:bg-gray-50 px-3 py-2">
+                {month.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <button onClick={calculateSalary} className="action-btn success" disabled={calculating} data-testid="calculate-btn">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+          {calculating ? "Calculating..." : "Calculate Salary"}
+        </button>
+        
+        {salaryData && (
+          <>
+            <button className="action-btn outline-primary" onClick={() => window.print()}>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+              Print
+            </button>
+            <button className="action-btn outline-danger">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+              PDF
+            </button>
+          </>
+        )}
+      </div>
 
       {staffList.length === 0 ? (
-        <div className="card text-center py-12">
-          <p className="text-gray-500 mb-4">No staff members found</p>
-          <a href="/staff" className="btn-primary">Add Staff First</a>
+        <div className="data-card"><div className="data-card-body text-center py-8"><p className="text-gray-500">No staff members found</p><a href="/staff" className="btn btn-primary mt-3">Add Staff First</a></div></div>
+      ) : salaryData ? (
+        <div className="salary-slip" data-testid="salary-slip">
+          <div className="salary-slip-header">
+            <h2 className="text-xl font-bold">SALARY SLIP</h2>
+            <p className="text-white/70 text-sm">{format(new Date(salaryData.month + "-01"), "MMMM yyyy")}</p>
+          </div>
+          <div className="salary-slip-body">
+            <div className="grid grid-cols-2 gap-4 pb-4 border-b-2 border-gray-200 mb-4">
+              <div><div className="text-xs text-gray-500 uppercase">Employee</div><div className="text-lg font-bold">{salaryData.staff_name}</div></div>
+              <div className="text-right"><div className="text-xs text-gray-500 uppercase">Monthly Salary</div><div className="text-lg font-bold">₹{salaryData.monthly_salary.toLocaleString('en-IN')}</div></div>
+            </div>
+
+            <div className="text-xs text-gray-500 uppercase mb-2">Attendance Summary</div>
+            <div className="grid grid-cols-4 gap-2 mb-4">
+              <div className="bg-green-50 p-3 rounded text-center"><div className="text-xl font-bold text-green-600">{salaryData.total_present}</div><div className="text-xs text-green-600">Present</div></div>
+              <div className="bg-red-50 p-3 rounded text-center"><div className="text-xl font-bold text-red-600">{salaryData.total_absent}</div><div className="text-xs text-red-600">Absent</div></div>
+              <div className="bg-yellow-50 p-3 rounded text-center"><div className="text-xl font-bold text-yellow-600">{salaryData.total_half_day}</div><div className="text-xs text-yellow-600">Half Day</div></div>
+              <div className="bg-gray-50 p-3 rounded text-center"><div className="text-xl font-bold text-gray-600">{salaryData.total_working_days}</div><div className="text-xs text-gray-600">Total</div></div>
+            </div>
+
+            <div className="text-xs text-gray-500 uppercase mb-2">Calculation</div>
+            <div className="salary-row"><span>Daily Rate (÷30)</span><span className="font-semibold">₹{salaryData.daily_rate.toLocaleString('en-IN')}</span></div>
+            <div className="salary-row"><span>Present ({salaryData.total_present} days)</span><span className="font-semibold text-green-600">+ ₹{salaryData.present_amount.toLocaleString('en-IN')}</span></div>
+            <div className="salary-row"><span>Half Day ({salaryData.total_half_day} days)</span><span className="font-semibold text-green-600">+ ₹{salaryData.half_day_amount.toLocaleString('en-IN')}</span></div>
+            <div className="salary-row"><span>Absent ({salaryData.total_absent} days)</span><span className="font-semibold text-red-600">- ₹{(salaryData.total_absent * salaryData.daily_rate).toLocaleString('en-IN')}</span></div>
+            <div className="salary-row total"><span>NET PAYABLE</span><span className="text-2xl text-orange-500">₹{salaryData.total_earned.toLocaleString('en-IN')}</span></div>
+          </div>
+          <div className="bg-gray-50 p-3 text-center text-xs text-gray-500">Generated on {format(new Date(), "dd-MM-yyyy HH:mm")} | 30-day calculation basis</div>
         </div>
       ) : (
-        <>
-          {/* Controls */}
-          <div className="flex flex-wrap gap-4 items-center mb-8">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="btn-secondary flex items-center gap-2 min-w-[200px] justify-between" data-testid="salary-staff-selector">
-                  <span className="font-bold">{selectedStaff?.name}</span>
-                  <ChevronRight size={16} className="rotate-90" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="bg-white border-2 border-black">
-                {staffList.map((staff) => (
-                  <DropdownMenuItem
-                    key={staff.id}
-                    onClick={() => {
-                      setSelectedStaff(staff);
-                      setSalaryData(null);
-                    }}
-                    className="cursor-pointer hover:bg-gray-100 px-4 py-2"
-                  >
-                    {staff.name}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="btn-secondary flex items-center gap-2 min-w-[200px] justify-between" data-testid="month-selector">
-                  <span className="font-bold">
-                    {monthOptions.find((m) => m.value === selectedMonth)?.label}
-                  </span>
-                  <ChevronRight size={16} className="rotate-90" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="bg-white border-2 border-black max-h-[300px] overflow-auto">
-                {monthOptions.map((month) => (
-                  <DropdownMenuItem
-                    key={month.value}
-                    onClick={() => {
-                      setSelectedMonth(month.value);
-                      setSalaryData(null);
-                    }}
-                    className="cursor-pointer hover:bg-gray-100 px-4 py-2"
-                  >
-                    {month.label}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            <button
-              onClick={calculateSalary}
-              className="btn-primary flex items-center gap-2"
-              disabled={calculating}
-              data-testid="calculate-btn"
-            >
-              <Calculator size={20} />
-              {calculating ? "Calculating..." : "Calculate Salary"}
-            </button>
+        <div className="data-card">
+          <div className="data-card-body text-center py-12">
+            <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+            <h3 className="text-lg font-semibold text-gray-700 mb-2">Select Staff & Month</h3>
+            <p className="text-gray-500 text-sm mb-4">Choose staff and month, then click "Calculate Salary"</p>
+            <div className="bg-orange-50 rounded-lg p-4 max-w-sm mx-auto text-sm text-orange-800">
+              <strong>Formula:</strong> Daily = Monthly ÷ 30 | Half Day = Daily ÷ 2
+            </div>
           </div>
-
-          {/* Salary Slip */}
-          {salaryData && (
-            <div className="animate-fade-in" data-testid="salary-slip">
-              <div className="flex justify-end mb-4 print:hidden">
-                <button
-                  onClick={handlePrint}
-                  className="btn-secondary flex items-center gap-2"
-                  data-testid="print-btn"
-                >
-                  <Printer size={20} />
-                  Print Slip
-                </button>
-              </div>
-
-              <div className="salary-slip max-w-2xl mx-auto">
-                <div className="salary-slip-header">
-                  <h2 className="text-2xl font-black tracking-tight" style={{ fontFamily: 'Chivo, sans-serif' }}>
-                    SALARY SLIP
-                  </h2>
-                  <p className="text-white/80 mt-1">
-                    {format(new Date(salaryData.month + "-01"), "MMMM yyyy")}
-                  </p>
-                </div>
-
-                <div className="salary-slip-body">
-                  {/* Employee Info */}
-                  <div className="mb-6 pb-4 border-b-2 border-black">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <div className="text-xs uppercase tracking-widest text-gray-500 font-bold">Employee Name</div>
-                        <div className="text-xl font-bold mt-1">{salaryData.staff_name}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-xs uppercase tracking-widest text-gray-500 font-bold">Monthly Salary</div>
-                        <div className="text-xl font-bold mt-1">₹{salaryData.monthly_salary.toLocaleString('en-IN')}</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Attendance Summary */}
-                  <div className="mb-6">
-                    <div className="text-xs uppercase tracking-widest text-gray-500 font-bold mb-3">Attendance Summary</div>
-                    <div className="grid grid-cols-4 gap-0">
-                      <div className="border-2 border-black p-3 text-center -mr-[1px] -mb-[1px]">
-                        <div className="text-2xl font-black">{salaryData.total_present}</div>
-                        <div className="text-xs uppercase tracking-wider">Present</div>
-                      </div>
-                      <div className="border-2 border-black p-3 text-center -mr-[1px] -mb-[1px]">
-                        <div className="text-2xl font-black text-[#E32636]">{salaryData.total_absent}</div>
-                        <div className="text-xs uppercase tracking-wider">Absent</div>
-                      </div>
-                      <div className="border-2 border-black p-3 text-center -mr-[1px] -mb-[1px]">
-                        <div className="text-2xl font-black text-[#B8860B]">{salaryData.total_half_day}</div>
-                        <div className="text-xs uppercase tracking-wider">Half Day</div>
-                      </div>
-                      <div className="border-2 border-black p-3 text-center -mb-[1px]">
-                        <div className="text-2xl font-black">{salaryData.total_working_days}</div>
-                        <div className="text-xs uppercase tracking-wider">Total</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Calculation */}
-                  <div className="text-xs uppercase tracking-widest text-gray-500 font-bold mb-3">Salary Breakdown</div>
-                  
-                  <div className="salary-row">
-                    <span>Daily Rate (Monthly ÷ 30)</span>
-                    <span className="font-bold">₹{salaryData.daily_rate.toLocaleString('en-IN')}</span>
-                  </div>
-
-                  <div className="salary-row">
-                    <span>Present Days ({salaryData.total_present} × ₹{salaryData.daily_rate})</span>
-                    <span className="font-bold text-green-700">+ ₹{salaryData.present_amount.toLocaleString('en-IN')}</span>
-                  </div>
-
-                  <div className="salary-row">
-                    <span>Half Days ({salaryData.total_half_day} × ₹{(salaryData.daily_rate / 2).toFixed(2)})</span>
-                    <span className="font-bold text-green-700">+ ₹{salaryData.half_day_amount.toLocaleString('en-IN')}</span>
-                  </div>
-
-                  <div className="salary-row">
-                    <span>Absent Deduction ({salaryData.total_absent} × ₹{salaryData.daily_rate})</span>
-                    <span className="font-bold text-[#E32636]">- ₹{(salaryData.total_absent * salaryData.daily_rate).toLocaleString('en-IN')}</span>
-                  </div>
-
-                  <div className="salary-row total">
-                    <span className="text-xl">NET PAYABLE</span>
-                    <span className="text-3xl font-black" style={{ fontFamily: 'Chivo, sans-serif' }}>
-                      ₹{salaryData.total_earned.toLocaleString('en-IN')}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Footer */}
-                <div className="bg-gray-50 p-4 border-t border-gray-200 text-center">
-                  <p className="text-xs text-gray-500">
-                    Generated on {format(new Date(), "dd MMM yyyy, HH:mm")} | Salary calculated on 30-day basis
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Info Card */}
-          {!salaryData && (
-            <div className="card max-w-2xl mx-auto text-center py-12">
-              <Calculator size={64} strokeWidth={1} className="mx-auto mb-4 text-gray-300" />
-              <h3 className="text-xl font-bold mb-2" style={{ fontFamily: 'Chivo, sans-serif' }}>
-                Select Staff & Month
-              </h3>
-              <p className="text-gray-500">
-                Choose a staff member and month, then click "Calculate Salary" to generate the salary slip.
-              </p>
-              <div className="mt-6 p-4 bg-gray-50 border-2 border-black">
-                <p className="text-sm font-medium">
-                  <strong>Calculation Formula:</strong><br />
-                  Daily Rate = Monthly Salary ÷ 30<br />
-                  Half Day = Daily Rate ÷ 2<br />
-                  Net = (Present Days × Daily) + (Half Days × Daily/2)
-                </p>
-              </div>
-            </div>
-          )}
-        </>
+        </div>
       )}
     </div>
   );
