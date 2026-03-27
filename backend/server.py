@@ -31,6 +31,113 @@ class AttendanceStatus(str, Enum):
     ABSENT = "absent"
     HALF_DAY = "half_day"
 
+# ==================== ACCOUNTING ENUMS ====================
+
+# Main Account Types (5 Golden Rules)
+class AccountType(str, Enum):
+    ASSET = "asset"
+    LIABILITY = "liability"
+    CAPITAL = "capital"
+    INCOME = "income"
+    EXPENSE = "expense"
+
+# Account Sub-Types
+class AccountSubType(str, Enum):
+    # Assets
+    CURRENT_ASSET = "current_asset"       # Cash, Bank, Debtors, Stock
+    FIXED_ASSET = "fixed_asset"           # Land, Building, Machinery, Furniture
+    # Liabilities
+    CURRENT_LIABILITY = "current_liability"  # Creditors, Short-term Loans
+    LONG_TERM_LIABILITY = "long_term_liability"  # Bank Loans, Mortgages
+    # Capital
+    OWNERS_CAPITAL = "owners_capital"
+    DRAWINGS = "drawings"
+    RETAINED_EARNINGS = "retained_earnings"
+    # Income
+    DIRECT_INCOME = "direct_income"       # Sales
+    INDIRECT_INCOME = "indirect_income"   # Interest Received, Commission
+    # Expense
+    DIRECT_EXPENSE = "direct_expense"     # Purchases, Wages
+    INDIRECT_EXPENSE = "indirect_expense" # Salary, Rent, Electricity
+
+# Financial Year Model
+class FinancialYearBase(BaseModel):
+    name: str  # e.g., "2025-26"
+    start_date: str  # "2025-04-01"
+    end_date: str  # "2026-03-31"
+    is_active: bool = True
+
+class FinancialYear(FinancialYearBase):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+# Chart of Accounts Model
+class AccountBase(BaseModel):
+    name: str
+    account_type: AccountType
+    sub_type: AccountSubType
+    code: Optional[str] = None  # Account code like 1001, 2001
+    description: Optional[str] = None
+    opening_balance: float = 0.0
+    opening_balance_type: str = "debit"  # debit or credit
+
+class AccountCreate(AccountBase):
+    pass
+
+class Account(AccountBase):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    current_balance: float = 0.0
+    is_active: bool = True
+    is_system: bool = False  # System accounts can't be deleted
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class AccountUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+
+# Journal Entry (Double Entry) Model
+class JournalEntryLine(BaseModel):
+    account_id: str
+    debit_amount: float = 0.0
+    credit_amount: float = 0.0
+    narration: Optional[str] = None
+
+class JournalEntryBase(BaseModel):
+    date: str  # YYYY-MM-DD
+    voucher_type: str  # payment, receipt, journal, contra, sales, purchase
+    voucher_no: Optional[str] = None
+    narration: str
+    entries: List[JournalEntryLine]
+    payment_mode: Optional[str] = None
+    reference: Optional[str] = None
+
+class JournalEntryCreate(JournalEntryBase):
+    pass
+
+class JournalEntry(JournalEntryBase):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    financial_year: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+# Opening Balance Model
+class OpeningBalanceBase(BaseModel):
+    account_id: str
+    financial_year: str
+    amount: float
+    balance_type: str  # debit or credit
+
+class OpeningBalanceCreate(OpeningBalanceBase):
+    pass
+
+class OpeningBalance(OpeningBalanceBase):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
 # Models
 class StaffBase(BaseModel):
     name: str
@@ -1293,6 +1400,562 @@ async def get_chit_summary():
         "total_remaining": total_remaining,
         "net_position": total_won - total_invested
     }
+
+# ==================== PROPER ACCOUNTING APIs ====================
+
+# Financial Year APIs
+@api_router.post("/financial-years", response_model=FinancialYear)
+async def create_financial_year(fy: FinancialYearBase):
+    # Deactivate other years if this is active
+    if fy.is_active:
+        await db.financial_years.update_many({}, {"$set": {"is_active": False}})
+    
+    fy_obj = FinancialYear(**fy.model_dump())
+    await db.financial_years.insert_one(fy_obj.model_dump())
+    return fy_obj
+
+@api_router.get("/financial-years")
+async def get_financial_years():
+    years = await db.financial_years.find({}, {"_id": 0}).sort("start_date", -1).to_list(100)
+    return years
+
+@api_router.get("/financial-years/active")
+async def get_active_financial_year():
+    fy = await db.financial_years.find_one({"is_active": True}, {"_id": 0})
+    if not fy:
+        # Create default FY if none exists
+        today = datetime.now()
+        if today.month >= 4:
+            start_year = today.year
+        else:
+            start_year = today.year - 1
+        
+        default_fy = FinancialYear(
+            name=f"{start_year}-{str(start_year+1)[-2:]}",
+            start_date=f"{start_year}-04-01",
+            end_date=f"{start_year+1}-03-31",
+            is_active=True
+        )
+        await db.financial_years.insert_one(default_fy.model_dump())
+        return default_fy.model_dump()
+    return fy
+
+@api_router.put("/financial-years/{fy_id}/activate")
+async def activate_financial_year(fy_id: str):
+    await db.financial_years.update_many({}, {"$set": {"is_active": False}})
+    result = await db.financial_years.update_one({"id": fy_id}, {"$set": {"is_active": True}})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Financial year not found")
+    return {"message": "Financial year activated"}
+
+# Chart of Accounts APIs
+@api_router.post("/accounts", response_model=Account)
+async def create_account(account: AccountCreate):
+    # Check if account code already exists
+    if account.code:
+        existing = await db.accounts.find_one({"code": account.code})
+        if existing:
+            raise HTTPException(status_code=400, detail="Account code already exists")
+    
+    account_obj = Account(**account.model_dump())
+    account_obj.current_balance = account.opening_balance
+    await db.accounts.insert_one(account_obj.model_dump())
+    return account_obj
+
+@api_router.get("/accounts")
+async def get_all_accounts(account_type: Optional[str] = None, sub_type: Optional[str] = None):
+    query = {}
+    if account_type:
+        query["account_type"] = account_type
+    if sub_type:
+        query["sub_type"] = sub_type
+    
+    accounts = await db.accounts.find(query, {"_id": 0}).sort("code", 1).to_list(10000)
+    return accounts
+
+@api_router.get("/accounts/{account_id}")
+async def get_account(account_id: str):
+    account = await db.accounts.find_one({"id": account_id}, {"_id": 0})
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    return account
+
+@api_router.put("/accounts/{account_id}", response_model=Account)
+async def update_account(account_id: str, account_update: AccountUpdate):
+    update_data = {k: v for k, v in account_update.model_dump().items() if v is not None}
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No update data provided")
+    
+    account = await db.accounts.find_one({"id": account_id}, {"_id": 0})
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    if account.get("is_system"):
+        raise HTTPException(status_code=400, detail="Cannot modify system account")
+    
+    await db.accounts.update_one({"id": account_id}, {"$set": update_data})
+    updated = await db.accounts.find_one({"id": account_id}, {"_id": 0})
+    return updated
+
+@api_router.delete("/accounts/{account_id}")
+async def delete_account(account_id: str):
+    account = await db.accounts.find_one({"id": account_id}, {"_id": 0})
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    if account.get("is_system"):
+        raise HTTPException(status_code=400, detail="Cannot delete system account")
+    
+    # Check if account has journal entries
+    entry_count = await db.journal_entries.count_documents({
+        "entries.account_id": account_id
+    })
+    if entry_count > 0:
+        raise HTTPException(status_code=400, detail=f"Cannot delete account with {entry_count} transactions")
+    
+    await db.accounts.delete_one({"id": account_id})
+    return {"message": "Account deleted"}
+
+@api_router.get("/accounts/grouped/all")
+async def get_accounts_grouped():
+    accounts = await db.accounts.find({}, {"_id": 0}).sort("code", 1).to_list(10000)
+    
+    grouped = {
+        "asset": {"current_asset": [], "fixed_asset": []},
+        "liability": {"current_liability": [], "long_term_liability": []},
+        "capital": {"owners_capital": [], "drawings": [], "retained_earnings": []},
+        "income": {"direct_income": [], "indirect_income": []},
+        "expense": {"direct_expense": [], "indirect_expense": []}
+    }
+    
+    for acc in accounts:
+        acc_type = acc["account_type"]
+        sub_type = acc["sub_type"]
+        if acc_type in grouped and sub_type in grouped[acc_type]:
+            grouped[acc_type][sub_type].append(acc)
+    
+    return grouped
+
+# Journal Entry (Voucher) APIs
+@api_router.post("/journal-entries", response_model=JournalEntry)
+async def create_journal_entry(entry: JournalEntryCreate):
+    # Validate double entry - Total Debit must equal Total Credit
+    total_debit = sum(e.debit_amount for e in entry.entries)
+    total_credit = sum(e.credit_amount for e in entry.entries)
+    
+    if abs(total_debit - total_credit) > 0.01:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Debit ({total_debit}) and Credit ({total_credit}) must be equal"
+        )
+    
+    # Validate all accounts exist
+    for e in entry.entries:
+        account = await db.accounts.find_one({"id": e.account_id})
+        if not account:
+            raise HTTPException(status_code=404, detail=f"Account {e.account_id} not found")
+    
+    # Get active financial year
+    fy = await db.financial_years.find_one({"is_active": True}, {"_id": 0})
+    
+    entry_obj = JournalEntry(**entry.model_dump())
+    entry_obj.financial_year = fy["id"] if fy else None
+    
+    # Generate voucher number if not provided
+    if not entry_obj.voucher_no:
+        count = await db.journal_entries.count_documents({"voucher_type": entry.voucher_type})
+        prefix = {"payment": "PAY", "receipt": "REC", "journal": "JV", "contra": "CNT", "sales": "SAL", "purchase": "PUR"}.get(entry.voucher_type, "VCH")
+        entry_obj.voucher_no = f"{prefix}-{count + 1:04d}"
+    
+    await db.journal_entries.insert_one(entry_obj.model_dump())
+    
+    # Update account balances
+    for e in entry.entries:
+        account = await db.accounts.find_one({"id": e.account_id}, {"_id": 0})
+        acc_type = account["account_type"]
+        
+        # Accounting rules for balance update
+        # Assets & Expenses: Debit increases, Credit decreases
+        # Liabilities, Capital, Income: Credit increases, Debit decreases
+        if acc_type in ["asset", "expense"]:
+            balance_change = e.debit_amount - e.credit_amount
+        else:
+            balance_change = e.credit_amount - e.debit_amount
+        
+        await db.accounts.update_one(
+            {"id": e.account_id},
+            {"$inc": {"current_balance": balance_change}}
+        )
+    
+    return entry_obj
+
+@api_router.get("/journal-entries")
+async def get_journal_entries(
+    date: Optional[str] = None,
+    voucher_type: Optional[str] = None,
+    account_id: Optional[str] = None,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None
+):
+    query = {}
+    if date:
+        query["date"] = date
+    if voucher_type:
+        query["voucher_type"] = voucher_type
+    if account_id:
+        query["entries.account_id"] = account_id
+    if from_date and to_date:
+        query["date"] = {"$gte": from_date, "$lte": to_date}
+    elif from_date:
+        query["date"] = {"$gte": from_date}
+    elif to_date:
+        query["date"] = {"$lte": to_date}
+    
+    entries = await db.journal_entries.find(query, {"_id": 0}).sort("date", -1).to_list(10000)
+    return entries
+
+@api_router.get("/journal-entries/{entry_id}")
+async def get_journal_entry(entry_id: str):
+    entry = await db.journal_entries.find_one({"id": entry_id}, {"_id": 0})
+    if not entry:
+        raise HTTPException(status_code=404, detail="Journal entry not found")
+    return entry
+
+@api_router.delete("/journal-entries/{entry_id}")
+async def delete_journal_entry(entry_id: str):
+    entry = await db.journal_entries.find_one({"id": entry_id}, {"_id": 0})
+    if not entry:
+        raise HTTPException(status_code=404, detail="Journal entry not found")
+    
+    # Reverse account balances
+    for e in entry["entries"]:
+        account = await db.accounts.find_one({"id": e["account_id"]}, {"_id": 0})
+        if account:
+            acc_type = account["account_type"]
+            if acc_type in ["asset", "expense"]:
+                balance_change = -(e["debit_amount"] - e["credit_amount"])
+            else:
+                balance_change = -(e["credit_amount"] - e["debit_amount"])
+            
+            await db.accounts.update_one(
+                {"id": e["account_id"]},
+                {"$inc": {"current_balance": balance_change}}
+            )
+    
+    await db.journal_entries.delete_one({"id": entry_id})
+    return {"message": "Journal entry deleted"}
+
+# Account Ledger API
+@api_router.get("/accounts/{account_id}/ledger")
+async def get_account_ledger(account_id: str, from_date: Optional[str] = None, to_date: Optional[str] = None):
+    account = await db.accounts.find_one({"id": account_id}, {"_id": 0})
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    
+    query = {"entries.account_id": account_id}
+    if from_date and to_date:
+        query["date"] = {"$gte": from_date, "$lte": to_date}
+    
+    entries = await db.journal_entries.find(query, {"_id": 0}).sort("date", 1).to_list(100000)
+    
+    ledger = []
+    running_balance = account.get("opening_balance", 0)
+    acc_type = account["account_type"]
+    
+    for entry in entries:
+        for line in entry["entries"]:
+            if line["account_id"] == account_id:
+                if acc_type in ["asset", "expense"]:
+                    running_balance += line["debit_amount"] - line["credit_amount"]
+                else:
+                    running_balance += line["credit_amount"] - line["debit_amount"]
+                
+                ledger.append({
+                    "date": entry["date"],
+                    "voucher_no": entry.get("voucher_no", ""),
+                    "voucher_type": entry["voucher_type"],
+                    "narration": entry["narration"],
+                    "debit": line["debit_amount"],
+                    "credit": line["credit_amount"],
+                    "balance": running_balance
+                })
+    
+    return {
+        "account": account,
+        "opening_balance": account.get("opening_balance", 0),
+        "current_balance": running_balance,
+        "entries": ledger
+    }
+
+# Opening Balance APIs
+@api_router.post("/opening-balances", response_model=OpeningBalance)
+async def create_opening_balance(ob: OpeningBalanceCreate):
+    # Check if opening balance already exists for this account and year
+    existing = await db.opening_balances.find_one({
+        "account_id": ob.account_id,
+        "financial_year": ob.financial_year
+    })
+    if existing:
+        # Update existing
+        await db.opening_balances.update_one(
+            {"id": existing["id"]},
+            {"$set": {"amount": ob.amount, "balance_type": ob.balance_type}}
+        )
+        # Update account
+        await db.accounts.update_one(
+            {"id": ob.account_id},
+            {"$set": {"opening_balance": ob.amount, "opening_balance_type": ob.balance_type, "current_balance": ob.amount}}
+        )
+        return await db.opening_balances.find_one({"id": existing["id"]}, {"_id": 0})
+    
+    ob_obj = OpeningBalance(**ob.model_dump())
+    await db.opening_balances.insert_one(ob_obj.model_dump())
+    
+    # Update account
+    await db.accounts.update_one(
+        {"id": ob.account_id},
+        {"$set": {"opening_balance": ob.amount, "opening_balance_type": ob.balance_type, "current_balance": ob.amount}}
+    )
+    
+    return ob_obj
+
+@api_router.get("/opening-balances/{financial_year}")
+async def get_opening_balances(financial_year: str):
+    balances = await db.opening_balances.find(
+        {"financial_year": financial_year}, {"_id": 0}
+    ).to_list(10000)
+    return balances
+
+# Trial Balance API
+@api_router.get("/reports/trial-balance")
+async def get_trial_balance(as_on_date: Optional[str] = None):
+    accounts = await db.accounts.find({"is_active": True}, {"_id": 0}).sort("code", 1).to_list(10000)
+    
+    trial_balance = []
+    total_debit = 0
+    total_credit = 0
+    
+    for acc in accounts:
+        balance = acc.get("current_balance", 0)
+        acc_type = acc["account_type"]
+        
+        # Determine if balance is debit or credit based on account type
+        if acc_type in ["asset", "expense"]:
+            if balance >= 0:
+                debit = balance
+                credit = 0
+            else:
+                debit = 0
+                credit = abs(balance)
+        else:  # liability, capital, income
+            if balance >= 0:
+                debit = 0
+                credit = balance
+            else:
+                debit = abs(balance)
+                credit = 0
+        
+        if debit > 0 or credit > 0:
+            trial_balance.append({
+                "account_id": acc["id"],
+                "account_name": acc["name"],
+                "account_code": acc.get("code", ""),
+                "account_type": acc_type,
+                "sub_type": acc["sub_type"],
+                "debit": debit,
+                "credit": credit
+            })
+            total_debit += debit
+            total_credit += credit
+    
+    return {
+        "as_on_date": as_on_date or datetime.now().strftime("%Y-%m-%d"),
+        "accounts": trial_balance,
+        "total_debit": total_debit,
+        "total_credit": total_credit,
+        "is_balanced": abs(total_debit - total_credit) < 0.01
+    }
+
+# Profit & Loss Statement API
+@api_router.get("/reports/profit-loss-statement")
+async def get_profit_loss_statement(from_date: Optional[str] = None, to_date: Optional[str] = None):
+    # Get all income and expense accounts
+    income_accounts = await db.accounts.find(
+        {"account_type": "income", "is_active": True}, {"_id": 0}
+    ).to_list(1000)
+    expense_accounts = await db.accounts.find(
+        {"account_type": "expense", "is_active": True}, {"_id": 0}
+    ).to_list(1000)
+    
+    income_items = []
+    expense_items = []
+    total_income = 0
+    total_expense = 0
+    
+    for acc in income_accounts:
+        balance = acc.get("current_balance", 0)
+        if balance != 0:
+            income_items.append({
+                "account_id": acc["id"],
+                "account_name": acc["name"],
+                "sub_type": acc["sub_type"],
+                "amount": balance
+            })
+            total_income += balance
+    
+    for acc in expense_accounts:
+        balance = acc.get("current_balance", 0)
+        if balance != 0:
+            expense_items.append({
+                "account_id": acc["id"],
+                "account_name": acc["name"],
+                "sub_type": acc["sub_type"],
+                "amount": balance
+            })
+            total_expense += balance
+    
+    net_profit = total_income - total_expense
+    
+    return {
+        "period": {
+            "from_date": from_date,
+            "to_date": to_date
+        },
+        "income": {
+            "direct_income": [i for i in income_items if i["sub_type"] == "direct_income"],
+            "indirect_income": [i for i in income_items if i["sub_type"] == "indirect_income"],
+            "total": total_income
+        },
+        "expenses": {
+            "direct_expense": [e for e in expense_items if e["sub_type"] == "direct_expense"],
+            "indirect_expense": [e for e in expense_items if e["sub_type"] == "indirect_expense"],
+            "total": total_expense
+        },
+        "net_profit": net_profit,
+        "is_profit": net_profit >= 0
+    }
+
+# Balance Sheet API
+@api_router.get("/reports/balance-sheet")
+async def get_balance_sheet(as_on_date: Optional[str] = None):
+    # Get all asset, liability, and capital accounts
+    asset_accounts = await db.accounts.find(
+        {"account_type": "asset", "is_active": True}, {"_id": 0}
+    ).to_list(1000)
+    liability_accounts = await db.accounts.find(
+        {"account_type": "liability", "is_active": True}, {"_id": 0}
+    ).to_list(1000)
+    capital_accounts = await db.accounts.find(
+        {"account_type": "capital", "is_active": True}, {"_id": 0}
+    ).to_list(1000)
+    
+    # Calculate net profit for the period
+    income_accounts = await db.accounts.find({"account_type": "income"}, {"_id": 0}).to_list(1000)
+    expense_accounts = await db.accounts.find({"account_type": "expense"}, {"_id": 0}).to_list(1000)
+    total_income = sum(acc.get("current_balance", 0) for acc in income_accounts)
+    total_expense = sum(acc.get("current_balance", 0) for acc in expense_accounts)
+    net_profit = total_income - total_expense
+    
+    def process_accounts(accounts):
+        items = []
+        total = 0
+        for acc in accounts:
+            balance = abs(acc.get("current_balance", 0))
+            if balance > 0:
+                items.append({
+                    "account_id": acc["id"],
+                    "account_name": acc["name"],
+                    "sub_type": acc["sub_type"],
+                    "amount": balance
+                })
+                total += balance
+        return items, total
+    
+    asset_items, total_assets = process_accounts(asset_accounts)
+    liability_items, total_liabilities = process_accounts(liability_accounts)
+    capital_items, total_capital = process_accounts(capital_accounts)
+    
+    # Add net profit to capital
+    total_capital += net_profit
+    
+    return {
+        "as_on_date": as_on_date or datetime.now().strftime("%Y-%m-%d"),
+        "assets": {
+            "current_assets": [a for a in asset_items if a["sub_type"] == "current_asset"],
+            "fixed_assets": [a for a in asset_items if a["sub_type"] == "fixed_asset"],
+            "total": total_assets
+        },
+        "liabilities": {
+            "current_liabilities": [l for l in liability_items if l["sub_type"] == "current_liability"],
+            "long_term_liabilities": [l for l in liability_items if l["sub_type"] == "long_term_liability"],
+            "total": total_liabilities
+        },
+        "capital": {
+            "items": capital_items,
+            "net_profit": net_profit,
+            "total": total_capital
+        },
+        "total_liabilities_and_capital": total_liabilities + total_capital,
+        "is_balanced": abs(total_assets - (total_liabilities + total_capital)) < 0.01
+    }
+
+# Initialize Default Accounts
+@api_router.post("/accounts/initialize-defaults")
+async def initialize_default_accounts():
+    """Create default chart of accounts for a new business"""
+    
+    # Check if accounts already exist
+    existing = await db.accounts.count_documents({})
+    if existing > 0:
+        return {"message": f"Accounts already exist ({existing} accounts). Skipping initialization."}
+    
+    default_accounts = [
+        # Current Assets
+        {"name": "Cash in Hand", "account_type": "asset", "sub_type": "current_asset", "code": "1001", "is_system": True},
+        {"name": "Bank Account", "account_type": "asset", "sub_type": "current_asset", "code": "1002", "is_system": True},
+        {"name": "Sundry Debtors", "account_type": "asset", "sub_type": "current_asset", "code": "1003"},
+        {"name": "Stock in Hand", "account_type": "asset", "sub_type": "current_asset", "code": "1004"},
+        # Fixed Assets
+        {"name": "Land & Building", "account_type": "asset", "sub_type": "fixed_asset", "code": "1101"},
+        {"name": "Furniture & Fixtures", "account_type": "asset", "sub_type": "fixed_asset", "code": "1102"},
+        {"name": "Machinery", "account_type": "asset", "sub_type": "fixed_asset", "code": "1103"},
+        {"name": "Vehicles", "account_type": "asset", "sub_type": "fixed_asset", "code": "1104"},
+        # Current Liabilities
+        {"name": "Sundry Creditors", "account_type": "liability", "sub_type": "current_liability", "code": "2001"},
+        {"name": "Duties & Taxes", "account_type": "liability", "sub_type": "current_liability", "code": "2002"},
+        # Long Term Liabilities
+        {"name": "Bank Loan", "account_type": "liability", "sub_type": "long_term_liability", "code": "2101"},
+        {"name": "Secured Loans", "account_type": "liability", "sub_type": "long_term_liability", "code": "2102"},
+        # Capital
+        {"name": "Capital Account", "account_type": "capital", "sub_type": "owners_capital", "code": "3001", "is_system": True},
+        {"name": "Drawings", "account_type": "capital", "sub_type": "drawings", "code": "3002"},
+        {"name": "Retained Earnings", "account_type": "capital", "sub_type": "retained_earnings", "code": "3003"},
+        # Direct Income
+        {"name": "Sales Account", "account_type": "income", "sub_type": "direct_income", "code": "4001", "is_system": True},
+        # Indirect Income
+        {"name": "Interest Received", "account_type": "income", "sub_type": "indirect_income", "code": "4101"},
+        {"name": "Commission Received", "account_type": "income", "sub_type": "indirect_income", "code": "4102"},
+        {"name": "Other Income", "account_type": "income", "sub_type": "indirect_income", "code": "4103"},
+        # Direct Expenses
+        {"name": "Purchases Account", "account_type": "expense", "sub_type": "direct_expense", "code": "5001"},
+        {"name": "Wages", "account_type": "expense", "sub_type": "direct_expense", "code": "5002"},
+        {"name": "Freight Inward", "account_type": "expense", "sub_type": "direct_expense", "code": "5003"},
+        # Indirect Expenses
+        {"name": "Salary", "account_type": "expense", "sub_type": "indirect_expense", "code": "5101", "is_system": True},
+        {"name": "Rent", "account_type": "expense", "sub_type": "indirect_expense", "code": "5102"},
+        {"name": "Electricity", "account_type": "expense", "sub_type": "indirect_expense", "code": "5103"},
+        {"name": "Telephone", "account_type": "expense", "sub_type": "indirect_expense", "code": "5104"},
+        {"name": "Printing & Stationery", "account_type": "expense", "sub_type": "indirect_expense", "code": "5105"},
+        {"name": "Interest Paid", "account_type": "expense", "sub_type": "indirect_expense", "code": "5106"},
+        {"name": "Bank Charges", "account_type": "expense", "sub_type": "indirect_expense", "code": "5107"},
+        {"name": "Miscellaneous Expenses", "account_type": "expense", "sub_type": "indirect_expense", "code": "5108"},
+    ]
+    
+    created = []
+    for acc_data in default_accounts:
+        acc = Account(**acc_data)
+        await db.accounts.insert_one(acc.model_dump())
+        created.append(acc.name)
+    
+    return {"message": f"Created {len(created)} default accounts", "accounts": created}
 
 # Include the router
 app.include_router(api_router)
