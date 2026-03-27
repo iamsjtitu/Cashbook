@@ -1,0 +1,92 @@
+{
+  "theme": "light",
+  "archetype": "4 (Swiss & High-Contrast)",
+  "design_philosophy": "Color is Function Only. Stark, minimalist interface emphasizing clear hierarchy and data density. Maximum readability through high contrast and stark boundaries.",
+  "colors": {
+    "background": "#FFFFFF",
+    "surface": "#F9FAFB",
+    "surface_hover": "#F3F4F6",
+    "border": "#000000",
+    "text_primary": "#000000",
+    "text_secondary": "#4B5563",
+    "primary": "#002FA7",
+    "primary_hover": "#00247D",
+    "status": {
+      "present": "#000000",
+      "absent": "#E32636",
+      "half_day": "#FFD700"
+    }
+  },
+  "typography": {
+    "heading_font": "Chivo",
+    "body_font": "IBM Plex Sans",
+    "heading_weights": [900, 300],
+    "body_weights": [400, 500, 600],
+    "h1": "text-4xl sm:text-5xl tracking-tighter font-black text-black",
+    "h2": "text-2xl sm:text-3xl tracking-tight font-bold text-black",
+    "h3": "text-xl sm:text-2xl tracking-tight font-semibold text-black",
+    "h4": "text-lg sm:text-xl tracking-tight font-medium text-black",
+    "body": "text-base leading-relaxed text-gray-800",
+    "small": "text-sm text-gray-600",
+    "label": "text-xs font-bold uppercase tracking-[0.2em] text-black"
+  },
+  "layout_and_spacing": {
+    "spacing_scale": "Use standard Tailwind scale but generous padding in structural containers (e.g., p-8) to emphasize negative space.",
+    "grid_strategy": "Control Room Grid (Dense, Data-heavy). Expose the skeleton, make the grid visible via border-collapse style layout.",
+    "border_radius": "rounded-none",
+    "shadows": "shadow-none",
+    "borders": "border-black border-[1px] or border-[2px] for major structural elements",
+    "surfaces": "Grid Borders: expose the skeleton. Cardless design, high contrast container outlines."
+  },
+  "components": {
+    "cards": "Cardless design. Use rectangular div with 1px or 2px black border, solid white background, zero border radius.",
+    "buttons": {
+      "primary": "bg-[#002FA7] text-white border-2 border-[#002FA7] hover:bg-black hover:border-black rounded-none transition-colors px-6 py-2 font-medium tracking-wide",
+      "secondary": "bg-white text-black border-2 border-black hover:bg-black hover:text-white rounded-none transition-colors px-6 py-2 font-medium tracking-wide",
+      "danger": "bg-white text-[#E32636] border-2 border-[#E32636] hover:bg-[#E32636] hover:text-white rounded-none px-6 py-2 font-medium tracking-wide"
+    },
+    "inputs": "bg-white border-2 border-black rounded-none focus:ring-0 focus:border-[#002FA7] focus:outline-none p-3 text-base",
+    "tables": "w-full border-collapse border-2 border-black. th: border-b-2 border-black uppercase text-xs tracking-[0.1em] font-bold p-4 text-left. td: border-b border-black/10 p-4 align-top.",
+    "navigation": "Header must have solid background. Side nav with 2px black border separating it from main content. Active links bold with a black left border indicator.",
+    "rules": [
+      "DO NOT use HTML-based components for advanced user interactions.",
+      "Use Shadcn calendar for date pickers (NOT HTML input type='date').",
+      "Use Shadcn dropdown-menu (NOT HTML <select>).",
+      "Use Sonner for toast notifications.",
+      "Use Recharts or Shadcn charts if data visualization is needed."
+    ]
+  },
+  "motion_and_interaction": {
+    "hover_states": "Hard background color inversions or striking color shifts. Text color MUST explicitly be set on hover to ensure contrast.",
+    "transitions": "transition-all duration-200 ease-in-out",
+    "focus": "outline-none ring-2 ring-[#002FA7] ring-offset-2 ring-offset-white"
+  },
+  "assets": {
+    "icons": {
+      "library": "@phosphor-icons/react",
+      "style": "bold or fill for strong geometric presence",
+      "installation_command": "yarn add @phosphor-icons/react"
+    },
+    "images": {
+      "login_hero": {
+        "url": "https://static.prod-images.emergentagent.com/jobs/3b55aa51-b86f-4ecf-a590-c730144e34e5/images/6534b5abda71e4b985d8405e7ee46546b951bc69dbc662529f0d54e1a4d9f7e0.png",
+        "description": "Minimalist Swiss poster style abstract geometric composition for the login page hero section.",
+        "usage": "Use as a full-height visual on the left or right side of a split login screen."
+      }
+    }
+  },
+  "specific_pages": {
+    "staff_dashboard": "Dense table view. Use square color blocks (Red/Yellow/Black) for attendance status in the calendar/table view, rather than soft colored pills.",
+    "salary_calculator": "Clear typographic hierarchy. Bold prominent text for the final calculated 'Monthly Salary' figure, styled almost like an invoice.",
+    "whats_new": "A slide-over sheet or modal with stark typography, list items separated by solid 1px black borders."
+  },
+  "testing": {
+    "data_testid": "All interactive elements MUST include a descriptive data-testid attribute in kebab-case (e.g., 'login-submit-button', 'staff-table-row', 'mark-present-btn')."
+  },
+  "instructions_to_main_agent": [
+    "Follow the JSON media assets strictly. Do not use random placeholder links.",
+    "Implement the font pairs: Chivo for headings, IBM Plex Sans for body.",
+    "Ensure the UI elements look brutalist, high-contrast, structural, and 'Swiss'. This means sharp 0px border radius, clear dark borders, thick lines, dense grids.",
+    "Emphasize the layout using grid and flex, without relying on standard soft shadow cards."
+  ]
+}
