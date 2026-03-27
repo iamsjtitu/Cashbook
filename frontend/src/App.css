@@ -1,34 +1,295 @@
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
-}
-
-.App-header {
-    background-color: #0f0f10;
+/* Main App Styles */
+.app-container {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+}
+
+/* Sidebar */
+.sidebar {
+    width: 280px;
+    min-height: 100vh;
+    background-color: white;
+    border-right: 2px solid black;
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar-header {
+    padding: 1.5rem;
+    border-bottom: 2px solid black;
+}
+
+.sidebar-nav {
+    flex: 1;
+    padding: 1rem 0;
+}
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.5rem;
+    color: black;
+    text-decoration: none;
+    font-weight: 500;
+    transition: all 0.2s;
+    border-left: 4px solid transparent;
+}
+
+.nav-item:hover {
+    background-color: #F9FAFB;
+}
+
+.nav-item.active {
+    background-color: #F9FAFB;
+    border-left-color: black;
+    font-weight: 600;
+}
+
+/* Main Content */
+.main-content {
+    flex: 1;
+    padding: 2rem;
+    background-color: #FFFFFF;
+}
+
+/* Page Header */
+.page-header {
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid black;
+}
+
+.page-title {
+    font-family: 'Chivo', sans-serif;
+    font-size: 2rem;
+    font-weight: 900;
+    letter-spacing: -0.025em;
+    color: black;
+    margin: 0;
+}
+
+.page-subtitle {
+    color: #4B5563;
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+}
+
+/* Cards */
+.card {
+    background-color: white;
+    border: 2px solid black;
+    padding: 1.5rem;
+}
+
+.card-header {
+    font-family: 'Chivo', sans-serif;
+    font-size: 1.125rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* Stats Grid */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0;
+}
+
+.stat-card {
+    background-color: white;
+    border: 2px solid black;
+    padding: 1.5rem;
+    margin: -1px;
+}
+
+.stat-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: #4B5563;
+    font-weight: 700;
+    font-family: 'Chivo', sans-serif;
+}
+
+.stat-value {
+    font-family: 'Chivo', sans-serif;
+    font-size: 2.5rem;
+    font-weight: 900;
+    color: black;
+    margin-top: 0.5rem;
+}
+
+/* Form styles */
+.form-group {
+    margin-bottom: 1.25rem;
+}
+
+.form-label {
+    display: block;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    font-family: 'Chivo', sans-serif;
+}
+
+.form-input {
+    width: 100%;
+    padding: 0.75rem;
+    border: 2px solid black;
+    background-color: white;
+    font-size: 1rem;
+    transition: border-color 0.2s;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: #002FA7;
+}
+
+/* Calendar day cell */
+.calendar-day {
+    aspect-ratio: 1;
+    display: flex;
     align-items: center;
     justify-content: center;
-    font-size: calc(10px + 2vmin);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+}
+
+.calendar-day:hover {
+    background-color: #F9FAFB;
+}
+
+.calendar-day.present {
+    background-color: black;
     color: white;
 }
 
-.App-link {
-    color: #61dafb;
+.calendar-day.absent {
+    background-color: #E32636;
+    color: white;
 }
 
-@keyframes App-logo-spin {
+.calendar-day.half-day {
+    background-color: #FFD700;
+    color: black;
+}
+
+/* Modal overlay */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+}
+
+.modal-content {
+    background-color: white;
+    border: 2px solid black;
+    max-width: 500px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.modal-header {
+    padding: 1.5rem;
+    border-bottom: 2px solid black;
+    font-family: 'Chivo', sans-serif;
+    font-size: 1.25rem;
+    font-weight: 700;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+
+.modal-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+}
+
+/* Salary slip */
+.salary-slip {
+    border: 2px solid black;
+    background: white;
+}
+
+.salary-slip-header {
+    background-color: black;
+    color: white;
+    padding: 1.5rem;
+    text-align: center;
+}
+
+.salary-slip-body {
+    padding: 1.5rem;
+}
+
+.salary-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.salary-row.total {
+    border-top: 2px solid black;
+    border-bottom: none;
+    margin-top: 0.5rem;
+    padding-top: 1rem;
+    font-weight: 700;
+}
+
+/* Attendance legend */
+.attendance-legend {
+    display: flex;
+    gap: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+}
+
+.legend-color {
+    width: 1rem;
+    height: 1rem;
+    border: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+/* Animation */
+@keyframes fadeIn {
     from {
-        transform: rotate(0deg);
+        opacity: 0;
+        transform: translateY(-10px);
     }
     to {
-        transform: rotate(360deg);
+        opacity: 1;
+        transform: translateY(0);
     }
+}
+
+.animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
 }
