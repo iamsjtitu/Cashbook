@@ -70,7 +70,7 @@
 
 ## Testing Status
 - Backend: 100% (15/15 tests passed - iteration 12)
-- Frontend: 100% (All features verified)
+- Frontend: 100% (11/11 export features tested - iteration 13)
 
 ## Implementation Complete (December 2025)
 
@@ -92,12 +92,15 @@
 - [x] **Password Change** option in Admin dropdown
 - [x] **Auto-Refresh** toggle (Manual/Auto 30s)
 - [x] **Electron Auto-Updater** (main.js + GitHub Actions workflow)
-- [x] Database cleared for fresh testing
+- [x] **Bulk Attendance Marking** (All Staff Today + Fill Unmarked)
+- [x] **PDF Export** (Staff, Attendance, Cash Book, Salary Slip)
+- [x] **Excel Export** (Staff, Attendance, Cash Book)
+- [x] **Receipt Printing** (Salary & Advance payments)
 
-### Backlog (P2)
-- [ ] PDF Export (Reports download)
-- [ ] Excel Export
-- [ ] Receipt Printing
+### Backlog (Future)
+- [ ] More detailed P&L categories
+- [ ] Multi-user support
+- [ ] Mobile app
 
 ## User Language
 - Primary: Hindi / Hinglish
