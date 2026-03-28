@@ -15,6 +15,8 @@ const EXPENSE_CATEGORIES = {
   food: { label: "Food", color: "bg-pink-500" },
   interest_paid: { label: "Interest Paid", color: "bg-amber-500" },
   chit_fund: { label: "Chit Fund", color: "bg-violet-500" },
+  ghar_kharcha: { label: "Ghar Kharcha", color: "bg-teal-500" },
+  office_expense: { label: "Office Expense", color: "bg-cyan-500" },
   other: { label: "Other", color: "bg-gray-500" }
 };
 
@@ -22,8 +24,9 @@ const ProfitLossStatement = () => {
   const { activeFY, financialYears } = useContext(FYContext);
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), "yyyy-MM"));
   const [selectedFY, setSelectedFY] = useState(null);
-  const [filterType, setFilterType] = useState("month"); // "month" or "fy"
+  const [filterType, setFilterType] = useState("month");
   const [plData, setPlData] = useState(null);
+  const [parties, setParties] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const getMonthOptions = () => {
@@ -46,14 +49,26 @@ const ProfitLossStatement = () => {
       } else if (filterType === "fy" && selectedFY) {
         url += `?fy=${selectedFY}`;
       }
-      const res = await axios.get(url);
-      setPlData(res.data);
+      const [plRes, partiesRes] = await Promise.all([
+        axios.get(url),
+        axios.get(`${API}/parties`)
+      ]);
+      setPlData(plRes.data);
+      setParties(partiesRes.data);
     } catch (error) {
       console.error("Error:", error);
     } finally {
       setLoading(false);
     }
   };
+
+  // Group parties by account head for P&L
+  const incomeParties = parties.filter(p => 
+    p.account_head === 'direct_income' || p.account_head === 'indirect_income'
+  );
+  const expenseParties = parties.filter(p => 
+    p.account_head === 'direct_expense' || p.account_head === 'indirect_expense'
+  );
 
   const monthOptions = getMonthOptions();
   const isProfit = (plData?.net_profit || 0) >= 0;
@@ -63,7 +78,6 @@ const ProfitLossStatement = () => {
   return (
     <div className="animate-fade-in" data-testid="profit-loss-page">
       <div className="action-bar">
-        {/* Filter Type Toggle */}
         <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
           <button 
             className={`px-3 py-1 rounded-md text-sm font-medium transition ${filterType === 'month' ? 'bg-white shadow text-orange-600' : 'text-gray-600'}`}
@@ -79,7 +93,6 @@ const ProfitLossStatement = () => {
           </button>
         </div>
 
-        {/* Month Filter */}
         {filterType === 'month' && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -99,7 +112,6 @@ const ProfitLossStatement = () => {
           </DropdownMenu>
         )}
 
-        {/* FY Filter */}
         {filterType === 'fy' && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -128,7 +140,6 @@ const ProfitLossStatement = () => {
         </button>
       </div>
 
-      {/* Period Label */}
       <div className="text-sm text-gray-500 mb-4">
         Showing data for: <span className="font-bold text-gray-700">{plData?.period || plData?.month || "All Time"}</span>
       </div>
@@ -162,10 +173,36 @@ const ProfitLossStatement = () => {
             <div className="data-card-title text-red-700">EXPENSES (खर्चे)</div>
           </div>
           <div className="data-card-body">
-            {Object.keys(plData?.expenses?.by_category || {}).length === 0 ? (
-              <div className="text-center py-4 text-gray-500">No expenses this period</div>
-            ) : (
-              <div className="space-y-3">
+            {/* Direct Expenses from Ledgers */}
+            {expenseParties.filter(p => p.account_head === 'direct_expense').length > 0 && (
+              <div className="mb-4">
+                <div className="text-xs text-gray-500 uppercase mb-2">Direct Expenses (प्रत्यक्ष खर्च)</div>
+                {expenseParties.filter(p => p.account_head === 'direct_expense').map(party => (
+                  <div key={party.id} className="flex justify-between p-2 bg-red-50 rounded mb-1">
+                    <span>{party.name}</span>
+                    <span className="font-bold text-red-600">₹{Math.abs(party.current_balance || 0).toLocaleString('en-IN')}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Indirect Expenses from Ledgers */}
+            {expenseParties.filter(p => p.account_head === 'indirect_expense').length > 0 && (
+              <div className="mb-4">
+                <div className="text-xs text-gray-500 uppercase mb-2">Indirect Expenses (अप्रत्यक्ष खर्च)</div>
+                {expenseParties.filter(p => p.account_head === 'indirect_expense').map(party => (
+                  <div key={party.id} className="flex justify-between p-2 bg-orange-50 rounded mb-1">
+                    <span>{party.name}</span>
+                    <span className="font-bold text-orange-600">₹{Math.abs(party.current_balance || 0).toLocaleString('en-IN')}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Category-wise Expenses from Cash Book */}
+            {Object.keys(plData?.expenses?.by_category || {}).length > 0 && (
+              <div className="mb-4">
+                <div className="text-xs text-gray-500 uppercase mb-2">By Category</div>
                 {Object.entries(plData?.expenses?.by_category || {}).map(([category, amount]) => {
                   const catInfo = EXPENSE_CATEGORIES[category] || { label: category, color: "bg-gray-500" };
                   const percentage = plData?.expenses?.total > 0 ? (amount / plData.expenses.total) * 100 : 0;
@@ -175,27 +212,27 @@ const ProfitLossStatement = () => {
                         <span className="font-medium">{catInfo.label}</span>
                         <span>₹{amount.toLocaleString('en-IN')} ({percentage.toFixed(1)}%)</span>
                       </div>
-                      <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-3 bg-gray-100 rounded-full overflow-hidden mb-2">
                         <div className={`h-full ${catInfo.color} rounded-full`} style={{width: `${percentage}%`}}></div>
                       </div>
                     </div>
                   );
                 })}
-                <div className="border-t pt-3 mt-3">
-                  <div className="flex justify-between font-bold text-lg">
-                    <span>Total Expenses</span>
-                    <span className="text-red-600">₹{(plData?.expenses?.total || 0).toLocaleString('en-IN')}</span>
-                  </div>
+              </div>
+            )}
+            
+            <div className="border-t pt-3 mt-3">
+              <div className="flex justify-between font-bold text-lg">
+                <span>Total Expenses</span>
+                <span className="text-red-600">₹{(plData?.expenses?.total || 0).toLocaleString('en-IN')}</span>
+              </div>
+            </div>
+            {isProfit && (
+              <div className="bg-green-100 p-3 rounded-lg mt-3">
+                <div className="flex justify-between font-bold text-green-700">
+                  <span>Net Profit (शुद्ध लाभ)</span>
+                  <span>₹{plData.net_profit.toLocaleString('en-IN')}</span>
                 </div>
-                {/* Net Profit (if profit) */}
-                {isProfit && (
-                  <div className="bg-green-100 p-3 rounded-lg">
-                    <div className="flex justify-between font-bold text-green-700">
-                      <span>Net Profit (शुद्ध लाभ)</span>
-                      <span>₹{plData.net_profit.toLocaleString('en-IN')}</span>
-                    </div>
-                  </div>
-                )}
               </div>
             )}
           </div>
@@ -207,40 +244,58 @@ const ProfitLossStatement = () => {
             <div className="data-card-title text-green-700">INCOME (आमदनी)</div>
           </div>
           <div className="data-card-body">
-            {Object.keys(plData?.income?.breakdown || {}).length === 0 && plData?.income?.total === 0 ? (
-              <div className="text-center py-4 text-gray-500">No income this period</div>
-            ) : (
-              <div className="space-y-3">
-                {Object.entries(plData?.income?.breakdown || {}).map(([source, amount]) => {
-                  const percentage = plData?.income?.total > 0 ? (amount / plData.income.total) * 100 : 0;
-                  return (
-                    <div key={source} className="flex justify-between items-center p-2 bg-green-50 rounded">
-                      <span className="font-medium capitalize">{source}</span>
-                      <span className="font-bold text-green-600">₹{amount.toLocaleString('en-IN')}</span>
-                    </div>
-                  );
-                })}
-                {plData?.income?.total > 0 && Object.keys(plData?.income?.breakdown || {}).length === 0 && (
-                  <div className="flex justify-between items-center p-2 bg-green-50 rounded">
-                    <span className="font-medium">Cash Received</span>
-                    <span className="font-bold text-green-600">₹{plData.income.total.toLocaleString('en-IN')}</span>
+            {/* Direct Income from Ledgers */}
+            {incomeParties.filter(p => p.account_head === 'direct_income').length > 0 && (
+              <div className="mb-4">
+                <div className="text-xs text-gray-500 uppercase mb-2">Direct Income (प्रत्यक्ष आय)</div>
+                {incomeParties.filter(p => p.account_head === 'direct_income').map(party => (
+                  <div key={party.id} className="flex justify-between p-2 bg-green-50 rounded mb-1">
+                    <span>{party.name}</span>
+                    <span className="font-bold text-green-600">₹{Math.abs(party.current_balance || 0).toLocaleString('en-IN')}</span>
                   </div>
-                )}
-                <div className="border-t pt-3 mt-3">
-                  <div className="flex justify-between font-bold text-lg">
-                    <span>Total Income</span>
-                    <span className="text-green-600">₹{(plData?.income?.total || 0).toLocaleString('en-IN')}</span>
+                ))}
+              </div>
+            )}
+
+            {/* Indirect Income from Ledgers */}
+            {incomeParties.filter(p => p.account_head === 'indirect_income').length > 0 && (
+              <div className="mb-4">
+                <div className="text-xs text-gray-500 uppercase mb-2">Indirect Income (अप्रत्यक्ष आय)</div>
+                {incomeParties.filter(p => p.account_head === 'indirect_income').map(party => (
+                  <div key={party.id} className="flex justify-between p-2 bg-emerald-50 rounded mb-1">
+                    <span>{party.name}</span>
+                    <span className="font-bold text-emerald-600">₹{Math.abs(party.current_balance || 0).toLocaleString('en-IN')}</span>
                   </div>
+                ))}
+              </div>
+            )}
+
+            {/* Income Breakdown from Cash Book */}
+            {Object.entries(plData?.income?.breakdown || {}).map(([source, amount]) => (
+              <div key={source} className="flex justify-between items-center p-2 bg-green-50 rounded mb-1">
+                <span className="font-medium capitalize">{source}</span>
+                <span className="font-bold text-green-600">₹{amount.toLocaleString('en-IN')}</span>
+              </div>
+            ))}
+            {plData?.income?.total > 0 && Object.keys(plData?.income?.breakdown || {}).length === 0 && incomeParties.length === 0 && (
+              <div className="flex justify-between items-center p-2 bg-green-50 rounded mb-1">
+                <span className="font-medium">Cash Received</span>
+                <span className="font-bold text-green-600">₹{plData.income.total.toLocaleString('en-IN')}</span>
+              </div>
+            )}
+            
+            <div className="border-t pt-3 mt-3">
+              <div className="flex justify-between font-bold text-lg">
+                <span>Total Income</span>
+                <span className="text-green-600">₹{(plData?.income?.total || 0).toLocaleString('en-IN')}</span>
+              </div>
+            </div>
+            {!isProfit && (
+              <div className="bg-red-100 p-3 rounded-lg mt-3">
+                <div className="flex justify-between font-bold text-red-700">
+                  <span>Net Loss (शुद्ध हानि)</span>
+                  <span>₹{Math.abs(plData.net_profit).toLocaleString('en-IN')}</span>
                 </div>
-                {/* Net Loss (if loss) */}
-                {!isProfit && (
-                  <div className="bg-red-100 p-3 rounded-lg">
-                    <div className="flex justify-between font-bold text-red-700">
-                      <span>Net Loss (शुद्ध हानि)</span>
-                      <span>₹{Math.abs(plData.net_profit).toLocaleString('en-IN')}</span>
-                    </div>
-                  </div>
-                )}
               </div>
             )}
           </div>
@@ -250,13 +305,13 @@ const ProfitLossStatement = () => {
       {/* Final Result */}
       <div className={`mt-6 p-6 rounded-lg text-center ${isProfit ? 'bg-green-100' : 'bg-red-100'}`}>
         <div className={`text-lg ${isProfit ? 'text-green-800' : 'text-red-800'}`}>
-          {isProfit ? '🎉 Congratulations! आपका Business PROFIT में है!' : '😔 आपका Business LOSS में है'}
+          {isProfit ? 'Congratulations! आपका Business PROFIT में है!' : 'आपका Business LOSS में है'}
         </div>
         <div className={`text-4xl font-bold mt-2 ${isProfit ? 'text-green-600' : 'text-red-600'}`}>
           {isProfit ? '+' : '-'}₹{Math.abs(plData?.net_profit || 0).toLocaleString('en-IN')}
         </div>
         <div className="text-sm mt-2 text-gray-600">
-          Based on Cash Book transactions
+          Based on Cash Book transactions + Ledger balances
         </div>
       </div>
     </div>

@@ -329,6 +329,20 @@ class ExpenseCategory(str, Enum):
     CHIT_FUND = "chit_fund"
     OTHER = "other"
 
+# Account Head Types for hierarchy
+class AccountHeadType(str, Enum):
+    # Balance Sheet Items
+    CURRENT_ASSET = "current_asset"
+    FIXED_ASSET = "fixed_asset"
+    CURRENT_LIABILITY = "current_liability"
+    LONG_TERM_LIABILITY = "long_term_liability"
+    CAPITAL = "capital"
+    # P&L Items
+    DIRECT_INCOME = "direct_income"
+    INDIRECT_INCOME = "indirect_income"
+    DIRECT_EXPENSE = "direct_expense"
+    INDIRECT_EXPENSE = "indirect_expense"
+
 # Party (Ledger Account) Models
 class PartyBase(BaseModel):
     name: str
@@ -336,6 +350,8 @@ class PartyBase(BaseModel):
     address: Optional[str] = None
     opening_balance: float = 0.0
     balance_type: TransactionType = TransactionType.DEBIT  # debit = we owe them, credit = they owe us
+    account_head: Optional[AccountHeadType] = None  # Category HEAD
+    parent_party_id: Optional[str] = None  # Parent ledger (for sub-ledgers)
 
 class PartyCreate(PartyBase):
     pass
@@ -352,6 +368,8 @@ class PartyUpdate(BaseModel):
     address: Optional[str] = None
     opening_balance: Optional[float] = None
     balance_type: Optional[TransactionType] = None
+    account_head: Optional[AccountHeadType] = None
+    parent_party_id: Optional[str] = None
 
 # Interest/Byaj Models
 class InterestAccountBase(BaseModel):
@@ -838,6 +856,34 @@ async def get_all_parties():
     parties = await db.parties.find({}, {"_id": 0}).sort("name", 1).to_list(1000)
     return parties
 
+# Get parties grouped by account head - MUST be before /parties/{party_id} to avoid route conflict
+@api_router.get("/parties/grouped")
+async def get_parties_grouped():
+    """Get all parties grouped by account head for reports"""
+    parties = await db.parties.find({}, {"_id": 0}).to_list(10000)
+    
+    grouped = {
+        "current_asset": [],
+        "fixed_asset": [],
+        "current_liability": [],
+        "long_term_liability": [],
+        "capital": [],
+        "direct_income": [],
+        "indirect_income": [],
+        "direct_expense": [],
+        "indirect_expense": [],
+        "uncategorized": []
+    }
+    
+    for party in parties:
+        head = party.get("account_head") or "uncategorized"
+        if head in grouped:
+            grouped[head].append(party)
+        else:
+            grouped["uncategorized"].append(party)
+    
+    return grouped
+
 @api_router.get("/parties/{party_id}", response_model=Party)
 async def get_party(party_id: str):
     party = await db.parties.find_one({"id": party_id}, {"_id": 0})
@@ -874,10 +920,35 @@ async def delete_party(party_id: str):
     if txn_count > 0:
         raise HTTPException(status_code=400, detail=f"Cannot delete party with {txn_count} transactions")
     
+    # Check if party has sub-parties
+    sub_count = await db.parties.count_documents({"parent_party_id": party_id})
+    if sub_count > 0:
+        raise HTTPException(status_code=400, detail=f"Cannot delete party with {sub_count} sub-ledgers")
+    
     result = await db.parties.delete_one({"id": party_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Party not found")
     return {"message": "Party deleted successfully"}
+
+# Account Head Types API
+@api_router.get("/account-heads")
+async def get_account_heads():
+    """Get all account head types for categorization"""
+    return {
+        "balance_sheet": [
+            {"value": "current_asset", "label": "Current Asset (चालू संपत्ति)", "type": "asset"},
+            {"value": "fixed_asset", "label": "Fixed Asset (स्थायी संपत्ति)", "type": "asset"},
+            {"value": "current_liability", "label": "Current Liability (चालू देनदारी)", "type": "liability"},
+            {"value": "long_term_liability", "label": "Long Term Liability (दीर्घकालिक देनदारी)", "type": "liability"},
+            {"value": "capital", "label": "Capital (पूंजी)", "type": "capital"}
+        ],
+        "profit_loss": [
+            {"value": "direct_income", "label": "Direct Income (प्रत्यक्ष आय)", "type": "income"},
+            {"value": "indirect_income", "label": "Indirect Income (अप्रत्यक्ष आय)", "type": "income"},
+            {"value": "direct_expense", "label": "Direct Expense (प्रत्यक्ष खर्च)", "type": "expense"},
+            {"value": "indirect_expense", "label": "Indirect Expense (अप्रत्यक्ष खर्च)", "type": "expense"}
+        ]
+    }
 
 # Party Ledger API
 @api_router.get("/parties/{party_id}/ledger")
