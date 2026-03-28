@@ -2660,6 +2660,77 @@ async def initialize_default_accounts():
     
     return {"message": f"Created {len(created)} default accounts", "accounts": created}
 
+# ==================== SETTINGS API ====================
+
+class AppSettings(BaseModel):
+    company_name: str = "Staff Manager"
+    company_address: Optional[str] = ""
+    company_phone: Optional[str] = ""
+    footer_text: Optional[str] = ""
+
+@api_router.get("/settings")
+async def get_settings():
+    settings = await db.settings.find_one({"type": "app_settings"}, {"_id": 0})
+    if not settings:
+        return AppSettings().model_dump()
+    return settings
+
+@api_router.post("/settings")
+async def save_settings(settings: AppSettings):
+    await db.settings.update_one(
+        {"type": "app_settings"},
+        {"$set": {**settings.model_dump(), "type": "app_settings", "updated_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True
+    )
+    return {"message": "Settings saved successfully"}
+
+# ==================== BACKUP API ====================
+
+@api_router.get("/backup/export")
+async def export_backup():
+    """Export all data as JSON for backup"""
+    backup_data = {
+        "backup_date": datetime.now(timezone.utc).isoformat(),
+        "version": "1.0",
+        "collections": {}
+    }
+    
+    collections_to_backup = [
+        "staff", "attendance", "salary_payments", "advances",
+        "parties", "transactions", "cash_book",
+        "expenses", "interest_accounts",
+        "chit_funds", "chit_monthly_entries",
+        "financial_years", "opening_balances",
+        "settings"
+    ]
+    
+    for coll_name in collections_to_backup:
+        coll = db[coll_name]
+        docs = await coll.find({}, {"_id": 0}).to_list(100000)
+        backup_data["collections"][coll_name] = docs
+    
+    return backup_data
+
+@api_router.post("/backup/restore")
+async def restore_backup(backup_data: dict):
+    """Restore data from backup JSON"""
+    if "collections" not in backup_data:
+        raise HTTPException(status_code=400, detail="Invalid backup format")
+    
+    restored = []
+    for coll_name, docs in backup_data["collections"].items():
+        if not docs:
+            continue
+        coll = db[coll_name]
+        # Clear existing data
+        await coll.delete_many({})
+        # Insert backup data
+        if isinstance(docs, list) and len(docs) > 0:
+            await coll.insert_many(docs)
+            restored.append(f"{coll_name}: {len(docs)}")
+    
+    return {"message": "Backup restored successfully", "restored": restored}
+
 # Include the router
 app.include_router(api_router)
 

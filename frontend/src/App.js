@@ -25,6 +25,7 @@ import ChitFund from "@/pages/ChitFund";
 // Financial Reports
 import BalanceSheet from "@/pages/BalanceSheet";
 import ProfitLossStatement from "@/pages/ProfitLossStatement";
+import Settings from "@/pages/Settings";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 export const API = `${BACKEND_URL}/api`;
@@ -203,6 +204,13 @@ const TopHeader = ({ onWhatsNewClick, activeFY, financialYears, onFYChange, auto
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="bg-white rounded-lg shadow-lg border">
+            <DropdownMenuItem onClick={() => window.location.href = '/settings'} className="cursor-pointer hover:bg-gray-50 px-3 py-2">
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              Settings
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={onPasswordChange} className="cursor-pointer hover:bg-gray-50 px-3 py-2">
               <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
@@ -285,12 +293,29 @@ const MainNav = () => {
   );
 };
 
-// Footer
+// Footer with dynamic settings
 const Footer = () => {
+  const [settings, setSettings] = useState({ company_name: "Staff Manager", footer_text: "" });
+  
+  useEffect(() => {
+    // Try to get from localStorage first, then fetch
+    const saved = localStorage.getItem('app_settings');
+    if (saved) {
+      setSettings(JSON.parse(saved));
+    }
+    // Also fetch from API
+    axios.get(`${API}/settings`).then(res => {
+      if (res.data) {
+        setSettings(res.data);
+        localStorage.setItem('app_settings', JSON.stringify(res.data));
+      }
+    }).catch(() => {});
+  }, []);
+
   return (
     <footer className="app-footer">
-      <div className="footer-title">Staff Manager - <span>Attendance & Salary System</span></div>
-      <div className="footer-info">Salary = Monthly ÷ 30 days | Half Day = Daily ÷ 2</div>
+      <div className="footer-title">{settings.company_name} - <span>Attendance & Salary System</span></div>
+      {settings.footer_text && <div className="footer-info">{settings.footer_text}</div>}
       <div className="footer-credits">v1.0.0 | Built with Emergent</div>
     </footer>
   );
@@ -396,6 +421,7 @@ function App() {
                 <Route path="/chitfund" element={<ChitFund />} />
                 <Route path="/profit-loss" element={<ProfitLossStatement />} />
                 <Route path="/balance-sheet" element={<BalanceSheet />} />
+                <Route path="/settings" element={<Settings />} />
               </Routes>
             </div>
             
