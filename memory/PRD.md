@@ -4,16 +4,35 @@
 - Staff attendance tracking with Present, Absent, Half Day options
 - Salary calculation always based on 30 days (regardless of month)
 - **Simplified Accounting System** (User rejected complex double-entry vouchers):
-  - Daily Cash Book
-  - Party Ledger with Opening Balances
+  - Daily Cash Book with Opening Balance
+  - Party Ledger with Opening Balance
   - Expenses tracking by category
   - Byaj (Interest) calculation on 30-day monthly basis
-  - Chit Fund tracking with Cash Book auto-link
-  - **Auto-generated P&L Statement** (from Cash Book transactions)
-  - **Auto-generated Balance Sheet** (from Cash Book, Party Ledger, Advances, Chit Fund)
+  - **Chit Fund with Monthly Dividend Tracking** (NEW!)
+  - Auto-generated P&L Statement
+  - Auto-generated Balance Sheet
   - Financial Year (April-March) filtering
-  - Opening Balances for Cash and Parties
 - Electron Desktop App with `.exe` on GitHub push
+
+## Chit Fund System (चिट फंड)
+
+### How It Works
+1. **Create Chit Fund** - Enter chit value, monthly EMI, total members, duration
+2. **Monthly Entry** - Each month enter EMI paid + Auction amount
+3. **Auto Dividend** - System calculates: `(Chit Value - Auction Amount) / Members`
+4. **Lift (Uthao)** - When you win/lift the chit, record the received amount
+5. **Final Profit** - System shows: Total Paid, Total Dividend, Lifted Amount, Net Profit
+
+### Example
+- Chit Value: ₹10,00,000
+- Members: 20
+- Monthly EMI: ₹50,000
+- This month auction: ₹7,50,000
+- **Your Dividend: (10,00,000 - 7,50,000) / 20 = ₹12,500**
+
+### Net Profit Calculation
+- **When Lifted:** Net Profit = Lifted Amount + Total Dividend - Total Paid
+- **When Not Lifted:** Net Profit = Total Dividend (savings so far)
 
 ## Architecture
 - **Backend**: FastAPI + MongoDB
@@ -25,22 +44,16 @@
 ```
 /app/
 ├── backend/
-│   ├── server.py           # All FastAPI endpoints (~2200 lines)
-│   └── tests/              # Pytest test files
+│   ├── server.py           # All FastAPI endpoints (~2300 lines)
+│   └── tests/
+│       └── test_chit_fund_dividend.py  # Chit fund tests
 ├── frontend/
 │   └── src/
 │       ├── App.js          # Main router (12 tabs)
 │       ├── pages/
-│       │   ├── Dashboard.jsx
-│       │   ├── StaffList.jsx
-│       │   ├── Attendance.jsx
-│       │   ├── SalaryCalculator.jsx
+│       │   ├── ChitFund.jsx         # NEW! Dividend tracking
 │       │   ├── CashBook.jsx         # With Opening Balance
 │       │   ├── PartyLedger.jsx      # With Opening Balance Edit
-│       │   ├── InterestByaj.jsx
-│       │   ├── Expenses.jsx
-│       │   ├── AccountingReports.jsx
-│       │   ├── ChitFund.jsx
 │       │   ├── ProfitLossStatement.jsx  # With FY/Month filter
 │       │   └── BalanceSheet.jsx
 │       └── components/ui/
@@ -48,118 +61,65 @@
 └── .github/workflows/
 ```
 
-## Core Features Implemented
+## What's Been Implemented (December 2025)
 
 ### Staff Management
-- Add/Edit/Delete staff members
-- Fields: name, phone, joining date, monthly salary
-
-### Attendance Tracking
-- Calendar-based attendance marking
-- Status: Present (P), Absent (A), Half-Day (H)
-
-### Salary Calculator (30-day basis)
-- Formula: Daily Rate = Monthly Salary ÷ 30
-- Half Day = Daily Rate ÷ 2
-- Advance auto-deduction
-
-### Simplified Accounting System
-
-#### 1. Daily Cash Book
-- Credit (Jama) and Debit (Udhar) entries
-- Payment modes: Cash, UPI, Bank Transfer
-- **Opening Balance** - Set FY start cash balance
-- Daily/Monthly summaries
-
-#### 2. Party Ledger
-- Track parties (debtors/creditors)
-- **Opening Balance** - Set and edit per party
-- Auto-update balance on transactions
-- View full ledger with running balance
-
-#### 3. Expenses
-- Categories: Salary, Rent, Electricity, Supplies, etc.
-- Auto-link to Cash Book
-
-#### 4. Byaj (Interest) System
-- 30-day monthly basis: 1 Month = 30 Days
-- Formula: Principal × Monthly Rate × Months / 100
-- One-click add to Cash Book + Party Ledger
-
-#### 5. Chit Fund
-- Track chit fund investments
-- Pay Installment → Auto DEBIT to Cash Book
-- Mark Won → Auto CREDIT to Cash Book
-
-#### 6. P&L Statement (Auto-Generated)
-- **Income**: Sum of Credit transactions
-- **Expenses**: Sum of Debit transactions by category
-- **Net Profit/Loss**: Income - Expenses
-- **Filters**: Monthly / Financial Year
-
-#### 7. Balance Sheet (Auto-Generated)
-- **Assets**: Cash Balance + Debtors + Advances + Chit Fund Investment + Interest Receivable
-- **Liabilities**: Creditors + Salaries Payable
-- **Capital (Net Worth)**: Assets - Liabilities
-- Always balanced by definition
-
-#### 8. Financial Year Support
-- April-March (Indian standard)
-- FY Selector in header
-- Filter reports by FY
-
-## API Endpoints
-
-### Financial Year
-- `GET /api/financial-years` - List all FYs
-- `GET /api/financial-years/active` - Get active FY
-- `PUT /api/financial-years/{id}/activate` - Set active FY
-
-### Cash Book
-- `GET /api/cashbook/{date}` - Daily cash book
-- `GET /api/cashbook/monthly/{month}` - Monthly summary
-- `GET /api/cashbook/opening-balance` - Get opening balance
-- `POST /api/cashbook/opening-balance` - Set opening balance
-
-### Reports
-- `GET /api/reports/simple-profit-loss?month=YYYY-MM&fy={id}` - P&L
-- `GET /api/reports/simple-balance-sheet?fy={id}` - Balance Sheet
-
-## What's Been Implemented (December 2025)
 - [x] Staff CRUD operations
 - [x] Attendance marking by calendar day
 - [x] Salary calculation (30-day basis)
 - [x] Advance tracking with deduction
+
+### Simplified Accounting
 - [x] Daily Cash Book with Opening Balance
 - [x] Party Ledger with Opening Balance Edit
-- [x] Byaj system (30-day monthly basis)
-- [x] Chit Fund tracking with Cash Book auto-link
 - [x] Expenses by category
-- [x] Auto-generated P&L Statement
-- [x] Auto-generated Balance Sheet
+- [x] Auto-generated P&L Statement (with FY filter)
+- [x] Auto-generated Balance Sheet (with FY filter)
 - [x] Financial Year (April-March) filtering
 - [x] FY Selector in header
-- [x] Opening Balances (Cash + Parties)
+
+### Byaj (Interest) System
+- [x] 30-day monthly basis calculation
+- [x] Principal × Rate × Months / 100
+- [x] One-click add to Cash Book + Party Ledger
+
+### Chit Fund System (NEW!)
+- [x] Create chit fund with chit_value, members, duration
+- [x] Monthly entry with auction_amount
+- [x] Auto-calculate dividend: (chit_value - auction_amount) / members
+- [x] Live dividend preview in modal
+- [x] Lift chit and record received amount
+- [x] Full summary with net profit calculation
+- [x] Cash Book integration (entry = DEBIT, lift = CREDIT)
+- [x] Data migration for old chit records
+
+### Desktop App
 - [x] Electron desktop app setup
 - [x] GitHub Actions for .exe build
 
-## Testing Status
-- Backend: 100% (45+ tests across multiple test files)
-- Frontend: 100% (All 12 pages functional)
+## API Endpoints
 
-## Navigation Tabs (12)
-1. Dashboard
-2. Staff
-3. Attendance
-4. Salary
-5. Cash Book
-6. Party Ledger
-7. Byaj
-8. Expenses
-9. Reports
-10. Chit Fund
-11. P&L
-12. Balance Sheet
+### Chit Fund (New)
+- `POST /api/chit-funds` - Create chit fund
+- `GET /api/chit-funds` - List all chit funds
+- `POST /api/chit-funds/{id}/monthly-entry` - Add monthly entry with dividend calculation
+- `GET /api/chit-funds/{id}/monthly-entries` - List monthly entries
+- `POST /api/chit-funds/{id}/lift` - Mark as lifted
+- `GET /api/chit-funds/{id}/summary` - Get full summary with net profit
+- `GET /api/chit-funds/summary/all` - Overall summary
+- `DELETE /api/chit-monthly-entries/{id}` - Delete entry
+
+### Financial Year
+- `GET /api/financial-years/active` - Get active FY
+- `PUT /api/financial-years/{id}/activate` - Set active FY
+
+### Reports
+- `GET /api/reports/simple-profit-loss?fy={id}` - P&L with FY filter
+- `GET /api/reports/simple-balance-sheet?fy={id}` - Balance Sheet with FY filter
+
+## Testing Status
+- Backend: 100% (All tests passed)
+- Frontend: 100% (All 12 pages functional)
 
 ## Prioritized Backlog
 
@@ -171,10 +131,9 @@
 - ✅ Cash Book with Opening Balance
 - ✅ Party Ledger with Opening Balance
 - ✅ Byaj (30-day monthly basis)
-- ✅ Chit Fund with Cash Book integration
+- ✅ Chit Fund with Dividend Tracking
 - ✅ Simplified P&L & Balance Sheet
 - ✅ Financial Year filtering
-- ✅ Electron desktop app setup
 
 ### P1 (Important)
 - [ ] Electron Auto-Update capability
@@ -189,22 +148,6 @@
 - [ ] Data backup to cloud
 - [ ] GST/Tax calculation
 
-## Technical Notes
-
-### Key Formulas
-- **Salary Daily Rate**: Monthly Salary ÷ 30
-- **Interest**: Principal × Monthly Rate × (Days/30) ÷ 100
-- **Net Profit**: Total Income - Total Expenses
-- **Net Worth**: Total Assets - Total Liabilities
-
-### Financial Year
-- Format: April-March (Indian standard)
-- Current: 2025-26 (April 2025 - March 2026)
-
-### Opening Balance
-- Cash: Stored in settings collection
-- Party: Stored per party, affects current_balance
-
 ## User Language
 - Primary: Hindi / Hinglish
-- UI labels include Hindi translations in parentheses
+- UI labels include Hindi translations
