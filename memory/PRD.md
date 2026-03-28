@@ -3,16 +3,16 @@
 ## Original Problem Statement
 - Staff attendance tracking with Present, Absent, Half Day options
 - Salary calculation always based on 30 days (regardless of month)
-- **Complete Proper Accounting System** with:
-  - Chart of Accounts (Asset, Liability, Capital, Income, Expense)
-  - Double Entry Voucher System (Payment, Receipt, Journal, Contra, Sales, Purchase)
-  - Financial Year: April-March (Indian standard)
-  - Opening Balances import
-  - Trial Balance
-  - Profit & Loss Statement
-  - Balance Sheet
-- Byaj (Interest) calculation on 30-day monthly basis
-- Chit Fund tracking with Cash Book auto-link
+- **Simplified Accounting System** (User rejected complex double-entry vouchers):
+  - Daily Cash Book
+  - Party Ledger with Opening Balances
+  - Expenses tracking by category
+  - Byaj (Interest) calculation on 30-day monthly basis
+  - Chit Fund tracking with Cash Book auto-link
+  - **Auto-generated P&L Statement** (from Cash Book transactions)
+  - **Auto-generated Balance Sheet** (from Cash Book, Party Ledger, Advances, Chit Fund)
+  - Financial Year (April-March) filtering
+  - Opening Balances for Cash and Parties
 - Electron Desktop App with `.exe` on GitHub push
 
 ## Architecture
@@ -25,27 +25,24 @@
 ```
 /app/
 ├── backend/
-│   ├── server.py           # All FastAPI endpoints
+│   ├── server.py           # All FastAPI endpoints (~2200 lines)
 │   └── tests/              # Pytest test files
 ├── frontend/
 │   └── src/
-│       ├── App.js          # Main router (15 tabs)
+│       ├── App.js          # Main router (12 tabs)
 │       ├── pages/
 │       │   ├── Dashboard.jsx
 │       │   ├── StaffList.jsx
 │       │   ├── Attendance.jsx
 │       │   ├── SalaryCalculator.jsx
-│       │   ├── CashBook.jsx
-│       │   ├── PartyLedger.jsx
+│       │   ├── CashBook.jsx         # With Opening Balance
+│       │   ├── PartyLedger.jsx      # With Opening Balance Edit
 │       │   ├── InterestByaj.jsx
 │       │   ├── Expenses.jsx
 │       │   ├── AccountingReports.jsx
 │       │   ├── ChitFund.jsx
-│       │   ├── ChartOfAccounts.jsx    # NEW
-│       │   ├── JournalEntry.jsx       # NEW
-│       │   ├── TrialBalance.jsx       # NEW
-│       │   ├── ProfitLossStatement.jsx # NEW
-│       │   └── BalanceSheet.jsx       # NEW
+│       │   ├── ProfitLossStatement.jsx  # With FY/Month filter
+│       │   └── BalanceSheet.jsx
 │       └── components/ui/
 ├── electron/
 └── .github/workflows/
@@ -66,97 +63,91 @@
 - Half Day = Daily Rate ÷ 2
 - Advance auto-deduction
 
-### Proper Accounting System (NEW!)
+### Simplified Accounting System
 
-#### 1. Chart of Accounts (खाता तालिका)
-- **5 Account Types**: Asset, Liability, Capital, Income, Expense
-- **11 Sub-Types**: 
-  - Assets: Current Asset, Fixed Asset
-  - Liabilities: Current Liability, Long-term Liability
-  - Capital: Owner's Capital, Drawings, Retained Earnings
-  - Income: Direct Income, Indirect Income
-  - Expense: Direct Expense, Indirect Expense
-- **30 Default Accounts** created automatically
-- Account codes: 1xxx=Assets, 2xxx=Liabilities, 3xxx=Capital, 4xxx=Income, 5xxx=Expenses
-- View account ledger with all transactions
+#### 1. Daily Cash Book
+- Credit (Jama) and Debit (Udhar) entries
+- Payment modes: Cash, UPI, Bank Transfer
+- **Opening Balance** - Set FY start cash balance
+- Daily/Monthly summaries
 
-#### 2. Double Entry Voucher System
-- **6 Voucher Types**: 
-  - Payment Voucher (💸)
-  - Receipt Voucher (💰)
-  - Journal Voucher (📝)
-  - Contra Voucher (🔄)
-  - Sales Voucher (🛒)
-  - Purchase Voucher (📦)
-- **Rule**: Total Debit MUST equal Total Credit
-- Auto-generated voucher numbers: PAY-0001, REC-0001, etc.
-- Account balances auto-update after voucher
+#### 2. Party Ledger
+- Track parties (debtors/creditors)
+- **Opening Balance** - Set and edit per party
+- Auto-update balance on transactions
+- View full ledger with running balance
 
-#### 3. Financial Year (वित्तीय वर्ष)
-- **Format**: April-March (Indian standard)
-- Current: 2025-26 (April 2025 - March 2026)
-- Opening balances linked to financial year
+#### 3. Expenses
+- Categories: Salary, Rent, Electricity, Supplies, etc.
+- Auto-link to Cash Book
 
-#### 4. Trial Balance (तलपट)
-- Shows all accounts with Debit and Credit totals
-- Grouped by account type
-- **Validation**: Total Debit = Total Credit
-
-#### 5. Profit & Loss Statement (लाभ-हानि खाता)
-- Income vs Expenses
-- Direct and Indirect breakdown
-- **Net Profit/Loss** calculation
-
-#### 6. Balance Sheet (चिट्ठा)
-- Two-column format
-- Left: Liabilities + Capital
-- Right: Assets
-- **Equation**: Assets = Liabilities + Capital
-- Net Profit added to Capital
-
-### Byaj (Interest) System
-- **Formula**: `(Principal × Monthly Rate % × Months) ÷ 100`
-- **30-Day Month Basis**: 1 Month = 30 Days (always)
+#### 4. Byaj (Interest) System
+- 30-day monthly basis: 1 Month = 30 Days
+- Formula: Principal × Monthly Rate × Months / 100
 - One-click add to Cash Book + Party Ledger
 
-### Chit Fund System
-- Track chit fund memberships
+#### 5. Chit Fund
+- Track chit fund investments
 - Pay Installment → Auto DEBIT to Cash Book
 - Mark Won → Auto CREDIT to Cash Book
 
+#### 6. P&L Statement (Auto-Generated)
+- **Income**: Sum of Credit transactions
+- **Expenses**: Sum of Debit transactions by category
+- **Net Profit/Loss**: Income - Expenses
+- **Filters**: Monthly / Financial Year
+
+#### 7. Balance Sheet (Auto-Generated)
+- **Assets**: Cash Balance + Debtors + Advances + Chit Fund Investment + Interest Receivable
+- **Liabilities**: Creditors + Salaries Payable
+- **Capital (Net Worth)**: Assets - Liabilities
+- Always balanced by definition
+
+#### 8. Financial Year Support
+- April-March (Indian standard)
+- FY Selector in header
+- Filter reports by FY
+
 ## API Endpoints
 
-### Accounting
-- `POST /api/accounts/initialize-defaults` - Create 30 default accounts
-- `GET/POST /api/accounts` - Chart of Accounts CRUD
-- `GET /api/accounts/{id}/ledger` - Account ledger
-- `GET/POST /api/journal-entries` - Voucher entry (double entry)
-- `GET /api/financial-years` - Financial year management
-- `GET /api/reports/trial-balance` - Trial Balance
-- `GET /api/reports/profit-loss-statement` - P&L Statement
-- `GET /api/reports/balance-sheet` - Balance Sheet
+### Financial Year
+- `GET /api/financial-years` - List all FYs
+- `GET /api/financial-years/active` - Get active FY
+- `PUT /api/financial-years/{id}/activate` - Set active FY
+
+### Cash Book
+- `GET /api/cashbook/{date}` - Daily cash book
+- `GET /api/cashbook/monthly/{month}` - Monthly summary
+- `GET /api/cashbook/opening-balance` - Get opening balance
+- `POST /api/cashbook/opening-balance` - Set opening balance
+
+### Reports
+- `GET /api/reports/simple-profit-loss?month=YYYY-MM&fy={id}` - P&L
+- `GET /api/reports/simple-balance-sheet?fy={id}` - Balance Sheet
 
 ## What's Been Implemented (December 2025)
 - [x] Staff CRUD operations
 - [x] Attendance marking by calendar day
 - [x] Salary calculation (30-day basis)
-- [x] Daily Cash Book
-- [x] Party Ledger
+- [x] Advance tracking with deduction
+- [x] Daily Cash Book with Opening Balance
+- [x] Party Ledger with Opening Balance Edit
 - [x] Byaj system (30-day monthly basis)
-- [x] Chit Fund tracking
-- [x] **Chart of Accounts (5 types, 11 sub-types)**
-- [x] **Double Entry Voucher System (6 types)**
-- [x] **Financial Year April-March**
-- [x] **Trial Balance**
-- [x] **Profit & Loss Statement**
-- [x] **Balance Sheet**
+- [x] Chit Fund tracking with Cash Book auto-link
+- [x] Expenses by category
+- [x] Auto-generated P&L Statement
+- [x] Auto-generated Balance Sheet
+- [x] Financial Year (April-March) filtering
+- [x] FY Selector in header
+- [x] Opening Balances (Cash + Parties)
 - [x] Electron desktop app setup
+- [x] GitHub Actions for .exe build
 
 ## Testing Status
-- Backend: 100% (17 accounting + previous tests)
-- Frontend: 100% (All 15 pages functional)
+- Backend: 100% (45+ tests across multiple test files)
+- Frontend: 100% (All 12 pages functional)
 
-## Navigation Tabs (15)
+## Navigation Tabs (12)
 1. Dashboard
 2. Staff
 3. Attendance
@@ -167,23 +158,8 @@
 8. Expenses
 9. Reports
 10. Chit Fund
-11. **Accounts** (Chart of Accounts)
-12. **Voucher** (Double Entry)
-13. **Trial Balance**
-14. **P&L**
-15. **Balance Sheet**
-
-## Accounting Rules Implemented
-| Rule | Implementation |
-|------|----------------|
-| Double Entry | Every voucher: Total Debit = Total Credit |
-| Asset Balance | Debit increases, Credit decreases |
-| Liability Balance | Credit increases, Debit decreases |
-| Capital Balance | Credit increases, Debit decreases |
-| Income Balance | Credit increases, Debit decreases |
-| Expense Balance | Debit increases, Credit decreases |
-| Trial Balance | Total Debit = Total Credit |
-| Balance Sheet | Assets = Liabilities + Capital |
+11. P&L
+12. Balance Sheet
 
 ## Prioritized Backlog
 
@@ -191,21 +167,44 @@
 - ✅ Staff management
 - ✅ Attendance tracking
 - ✅ Salary calculation (30-day basis)
+- ✅ Advance tracking
+- ✅ Cash Book with Opening Balance
+- ✅ Party Ledger with Opening Balance
 - ✅ Byaj (30-day monthly basis)
 - ✅ Chit Fund with Cash Book integration
-- ✅ Complete Proper Accounting System
-- ✅ Double Entry Voucher System
-- ✅ Trial Balance, P&L, Balance Sheet
+- ✅ Simplified P&L & Balance Sheet
+- ✅ Financial Year filtering
 - ✅ Electron desktop app setup
 
 ### P1 (Important)
-- Export reports as PDF
-- Export reports as Excel
-- Receipt/Invoice printing
-- GST/Tax calculation
+- [ ] Electron Auto-Update capability
+- [ ] Export reports as PDF
+- [ ] Export reports as Excel
+- [ ] Receipt/Invoice printing
 
 ### P2 (Nice to have)
-- Multiple organizations support
-- Staff photo upload
-- Email reports
-- Data backup to cloud
+- [ ] Multiple organizations support
+- [ ] Staff photo upload
+- [ ] Email reports
+- [ ] Data backup to cloud
+- [ ] GST/Tax calculation
+
+## Technical Notes
+
+### Key Formulas
+- **Salary Daily Rate**: Monthly Salary ÷ 30
+- **Interest**: Principal × Monthly Rate × (Days/30) ÷ 100
+- **Net Profit**: Total Income - Total Expenses
+- **Net Worth**: Total Assets - Total Liabilities
+
+### Financial Year
+- Format: April-March (Indian standard)
+- Current: 2025-26 (April 2025 - March 2026)
+
+### Opening Balance
+- Cash: Stored in settings collection
+- Party: Stored per party, affects current_balance
+
+## User Language
+- Primary: Hindi / Hinglish
+- UI labels include Hindi translations in parentheses
