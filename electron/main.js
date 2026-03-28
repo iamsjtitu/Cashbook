@@ -1,7 +1,6 @@
 const { app, BrowserWindow, Menu, dialog, shell, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { autoUpdater } = require('electron-updater');
 const Store = require('electron-store');
 
 // Initialize electron-store for persistent settings
@@ -16,10 +15,6 @@ const store = new Store({
     }
   }
 });
-
-// Configure auto-updater
-autoUpdater.autoDownload = false;
-autoUpdater.autoInstallOnAppQuit = true;
 
 let mainWindow;
 
@@ -111,13 +106,6 @@ function createWindow() {
     {
       label: 'Help',
       submenu: [
-        {
-          label: 'Check for Updates',
-          click: () => {
-            checkForUpdates();
-          }
-        },
-        { type: 'separator' },
         {
           label: 'About Staff Manager',
           click: () => {
@@ -302,79 +290,8 @@ ipcMain.handle('open-folder', (event, folderPath) => {
   return false;
 });
 
-// Auto-updater events
-autoUpdater.on('checking-for-update', () => {
-  console.log('Checking for updates...');
-});
-
-autoUpdater.on('update-available', (info) => {
-  dialog.showMessageBox(mainWindow, {
-    type: 'info',
-    title: 'Update Available',
-    message: `A new version (${info.version}) is available!`,
-    detail: 'Would you like to download and install it now?',
-    buttons: ['Download', 'Later']
-  }).then((result) => {
-    if (result.response === 0) {
-      autoUpdater.downloadUpdate();
-    }
-  });
-});
-
-autoUpdater.on('update-not-available', () => {
-  dialog.showMessageBox(mainWindow, {
-    type: 'info',
-    title: 'No Updates',
-    message: 'You are using the latest version!',
-    detail: 'Current version: ' + app.getVersion()
-  });
-});
-
-autoUpdater.on('download-progress', (progress) => {
-  mainWindow.setProgressBar(progress.percent / 100);
-});
-
-autoUpdater.on('update-downloaded', (info) => {
-  mainWindow.setProgressBar(-1);
-  dialog.showMessageBox(mainWindow, {
-    type: 'info',
-    title: 'Update Ready',
-    message: 'Update downloaded!',
-    detail: 'The application will restart to install the update.',
-    buttons: ['Restart Now', 'Later']
-  }).then((result) => {
-    if (result.response === 0) {
-      autoUpdater.quitAndInstall();
-    }
-  });
-});
-
-autoUpdater.on('error', (err) => {
-  dialog.showMessageBox(mainWindow, {
-    type: 'error',
-    title: 'Update Error',
-    message: 'Error checking for updates',
-    detail: err.message
-  });
-});
-
-function checkForUpdates() {
-  autoUpdater.checkForUpdates().catch(err => {
-    console.error('Update check failed:', err);
-  });
-}
-
 app.whenReady().then(() => {
   createWindow();
-  
-  // Check for updates on startup (only in production)
-  if (process.env.NODE_ENV !== 'development') {
-    setTimeout(() => {
-      autoUpdater.checkForUpdates().catch(err => {
-        console.log('Auto-update check failed:', err.message);
-      });
-    }, 3000);
-  }
 });
 
 app.on('window-all-closed', () => {
