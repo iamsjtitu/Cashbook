@@ -51,20 +51,56 @@ function loadMainApp() {
   mainWindow.setResizable(true);
   mainWindow.center();
   
-  // Add frame back
-  // Note: Can't change frame at runtime, so we'll just proceed
-  
   const isDev = !app.isPackaged;
   
   if (isDev) {
     mainWindow.loadURL('http://localhost:3000');
     mainWindow.webContents.openDevTools();
   } else {
-    const indexPath = path.join(__dirname, 'build', 'index.html');
-    mainWindow.loadFile(indexPath).catch(err => {
-      console.error('Load error:', err);
-      dialog.showErrorBox('Loading Error', `Could not load app: ${err.message}`);
-    });
+    // Try multiple possible paths
+    const possiblePaths = [
+      path.join(__dirname, 'build', 'index.html'),
+      path.join(app.getAppPath(), 'build', 'index.html'),
+      path.join(process.resourcesPath, 'app', 'build', 'index.html')
+    ];
+    
+    let indexPath = null;
+    for (const p of possiblePaths) {
+      console.log('Checking path:', p, 'Exists:', fs.existsSync(p));
+      if (fs.existsSync(p)) {
+        indexPath = p;
+        break;
+      }
+    }
+    
+    if (indexPath) {
+      console.log('Loading from:', indexPath);
+      mainWindow.loadFile(indexPath);
+      // Enable DevTools for debugging
+      mainWindow.webContents.openDevTools();
+    } else {
+      // Show error with all tried paths
+      const errorHtml = `
+        <html>
+        <body style="font-family:Arial;padding:40px;background:#1a1a2e;color:#fff;">
+          <h1 style="color:#ff6b35;">Build Files Not Found</h1>
+          <p>Could not locate index.html</p>
+          <h3>Tried paths:</h3>
+          <ul>
+            ${possiblePaths.map(p => `<li>${p}</li>`).join('')}
+          </ul>
+          <h3>Debug Info:</h3>
+          <ul>
+            <li>__dirname: ${__dirname}</li>
+            <li>app.getAppPath(): ${app.getAppPath()}</li>
+            <li>resourcesPath: ${process.resourcesPath}</li>
+            <li>isPackaged: ${app.isPackaged}</li>
+          </ul>
+        </body>
+        </html>
+      `;
+      mainWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(errorHtml));
+    }
   }
   
   // Setup menu
