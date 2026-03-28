@@ -119,6 +119,21 @@
   - Opening amount paid
   - Profit calculation (Expected - Actual = Profit So Far)
   - Edit Opening button
+- [x] **Dashboard Page** (March 2026):
+  - Whole-app summary: Staff count, Attendance today, Cash Balance
+  - Ledger stats: Total Ledgers, Debtors, Creditors
+  - Chit Fund: Active chits, Investment, Dividend
+  - Byaj Receivable, Monthly Expenses, Net Profit/Loss
+  - Recent Transactions widget
+  - Quick Actions grid
+- [x] **Settings Page** (March 2026):
+  - Header/Footer customization (Company Name, Address, Phone, Footer Text)
+  - Live preview of header/footer
+  - Backup Download (exports all data as JSON)
+  - Backup Restore (uploads JSON to restore data)
+- [x] **Individual Ledger PDF Export** (March 2026):
+  - PDF button in Party Ledger modal
+  - Exports specific party's "len den" statement
 
 ## Account Head System (New)
 Ledgers can now be categorized with Account Heads:
