@@ -43,37 +43,23 @@ function createWindow() {
     mainWindow.loadURL('http://localhost:3000');
     mainWindow.webContents.openDevTools();
   } else {
-    // Production - try multiple paths
-    const possiblePaths = [
-      path.join(__dirname, 'build', 'index.html'),
-      path.join(process.resourcesPath, 'app', 'build', 'index.html'),
-      path.join(process.resourcesPath, 'build', 'index.html'),
-      path.join(app.getAppPath(), 'build', 'index.html')
-    ];
+    // Production - load from app directory
+    const indexPath = path.join(__dirname, 'build', 'index.html');
+    console.log('App path:', app.getAppPath());
+    console.log('Loading:', indexPath);
     
-    let loaded = false;
-    for (const p of possiblePaths) {
-      if (fs.existsSync(p)) {
-        console.log('Loading from:', p);
-        mainWindow.loadFile(p);
-        loaded = true;
-        break;
-      }
-    }
-    
-    if (!loaded) {
+    mainWindow.loadFile(indexPath).catch(err => {
+      console.error('Load error:', err);
       mainWindow.loadURL(`data:text/html,
-        <html><body style="font-family:sans-serif;padding:40px;text-align:center;">
-        <h1>Build Error</h1>
-        <p>index.html not found. Tried:</p>
-        <ul style="text-align:left;max-width:600px;margin:auto;">
-        ${possiblePaths.map(p => `<li>${p}</li>`).join('')}
-        </ul>
+        <html><body style="font-family:Arial;padding:40px;text-align:center;">
+        <h1 style="color:red;">Loading Error</h1>
+        <p>${err.message}</p>
+        <p>Expected path: ${indexPath}</p>
         <p>App path: ${app.getAppPath()}</p>
-        <p>Resources: ${process.resourcesPath}</p>
+        <p>__dirname: ${__dirname}</p>
         </body></html>
       `);
-    }
+    });
   }
 
   mainWindow.once('ready-to-show', () => mainWindow.show());

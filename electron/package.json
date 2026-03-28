@@ -1,6 +1,6 @@
 {
   "name": "staff-manager",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "description": "Staff Attendance & Salary Management Desktop Application",
   "main": "main.js",
   "author": "Staff Manager",
@@ -27,19 +27,10 @@
       "main.js",
       "preload.js",
       "database.js",
-      "build/**/*"
+      "build/**/*",
+      "!node_modules"
     ],
-    "extraResources": [
-      {
-        "from": "build",
-        "to": "build",
-        "filter": ["**/*"]
-      }
-    ],
-    "asar": true,
-    "asarUnpack": [
-      "build/**/*"
-    ],
+    "asar": false,
     "win": {
       "target": [
         {

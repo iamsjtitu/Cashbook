@@ -235,7 +235,7 @@ const TopHeader = ({ onWhatsNewClick, activeFY, financialYears, onFYChange, auto
           </svg>
         </button>
         
-        <div className="version-badge">v1.1.5</div>
+        <div className="version-badge">v1.1.6</div>
       </div>
     </header>
   );
