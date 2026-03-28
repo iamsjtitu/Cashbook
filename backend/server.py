@@ -276,6 +276,8 @@ class PartyUpdate(BaseModel):
     name: Optional[str] = None
     phone: Optional[str] = None
     address: Optional[str] = None
+    opening_balance: Optional[float] = None
+    balance_type: Optional[TransactionType] = None
 
 # Interest/Byaj Models
 class InterestAccountBase(BaseModel):
@@ -690,6 +692,15 @@ async def update_party(party_id: str, party_update: PartyUpdate):
     if not update_data:
         raise HTTPException(status_code=400, detail="No update data provided")
     
+    # If opening_balance is being updated, recalculate current_balance
+    if "opening_balance" in update_data:
+        party = await db.parties.find_one({"id": party_id}, {"_id": 0})
+        if party:
+            old_opening = party.get("opening_balance", 0)
+            new_opening = update_data["opening_balance"]
+            diff = new_opening - old_opening
+            update_data["current_balance"] = party.get("current_balance", 0) + diff
+    
     result = await db.parties.update_one({"id": party_id}, {"$set": update_data})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Party not found")
@@ -949,6 +960,26 @@ async def delete_transaction(txn_id: str):
     await db.transactions.delete_one({"id": txn_id})
     return {"message": "Transaction deleted"}
 
+# Cash Book Opening Balance APIs (MUST be before /cashbook/{date} to avoid route conflict)
+@api_router.get("/cashbook/opening-balance")
+async def get_cashbook_opening_balance():
+    """Get cash book opening balance"""
+    setting = await db.settings.find_one({"key": "cash_opening_balance"}, {"_id": 0})
+    return {
+        "opening_balance": setting.get("value", 0) if setting else 0,
+        "as_on_date": setting.get("as_on_date", "2025-04-01") if setting else "2025-04-01"
+    }
+
+@api_router.post("/cashbook/opening-balance")
+async def set_cashbook_opening_balance(amount: float, as_on_date: str = "2025-04-01"):
+    """Set cash book opening balance (for Financial Year start)"""
+    await db.settings.update_one(
+        {"key": "cash_opening_balance"},
+        {"$set": {"key": "cash_opening_balance", "value": amount, "as_on_date": as_on_date}},
+        upsert=True
+    )
+    return {"message": "Opening balance set", "opening_balance": amount, "as_on_date": as_on_date}
+
 # Cash Book API
 @api_router.get("/cashbook/{date}")
 async def get_cashbook(date: str):
@@ -956,12 +987,17 @@ async def get_cashbook(date: str):
         {"date": date}, {"_id": 0}
     ).sort("created_at", 1).to_list(1000)
     
-    # Get previous day's closing as opening
+    # Get cash opening balance from settings
+    setting = await db.settings.find_one({"key": "cash_opening_balance"}, {"_id": 0})
+    cash_opening = setting.get("value", 0) if setting else 0
+    cash_opening_date = setting.get("as_on_date", "2025-04-01") if setting else "2025-04-01"
+    
+    # Get previous day's closing as opening (considering opening balance)
     prev_txns = await db.transactions.find(
-        {"date": {"$lt": date}}, {"_id": 0}
+        {"date": {"$gte": cash_opening_date, "$lt": date}}, {"_id": 0}
     ).to_list(100000)
     
-    opening = 0
+    opening = cash_opening
     for t in prev_txns:
         if t["transaction_type"] == "credit":
             opening += t["amount"]
@@ -1101,11 +1137,25 @@ async def delete_expense(expense_id: str):
 # ==================== SIMPLIFIED P&L & BALANCE SHEET (Connected to existing system) ====================
 
 @api_router.get("/reports/simple-profit-loss")
-async def get_simple_profit_loss(month: Optional[str] = None):
-    """P&L based on existing Cash Book transactions"""
+async def get_simple_profit_loss(month: Optional[str] = None, fy: Optional[str] = None):
+    """P&L based on existing Cash Book transactions
+    
+    Args:
+        month: Filter by month (YYYY-MM)
+        fy: Filter by Financial Year ID (April-March)
+    """
     query = {}
+    period_label = "All Time"
+    
     if month:
         query["date"] = {"$regex": f"^{month}"}
+        period_label = month
+    elif fy:
+        # Get FY dates
+        fy_data = await db.financial_years.find_one({"id": fy}, {"_id": 0})
+        if fy_data:
+            query["date"] = {"$gte": fy_data["start_date"], "$lte": fy_data["end_date"]}
+            period_label = f"FY {fy_data['name']}"
     
     # Get all transactions
     transactions = await db.transactions.find(query, {"_id": 0}).to_list(100000)
@@ -1140,6 +1190,7 @@ async def get_simple_profit_loss(month: Optional[str] = None):
     net_profit = total_income - total_expense
     
     return {
+        "period": period_label,
         "month": month or "All Time",
         "income": {
             "total": total_income,
@@ -1156,13 +1207,32 @@ async def get_simple_profit_loss(month: Optional[str] = None):
     }
 
 @api_router.get("/reports/simple-balance-sheet")
-async def get_simple_balance_sheet():
-    """Balance Sheet based on existing Cash Book and Party Ledger"""
+async def get_simple_balance_sheet(as_on_date: Optional[str] = None, fy: Optional[str] = None):
+    """Balance Sheet based on existing Cash Book and Party Ledger
+    
+    Args:
+        as_on_date: Calculate balance sheet as on specific date (YYYY-MM-DD)
+        fy: Filter by Financial Year ID
+    """
+    date_filter = {}
+    period_label = "All Time"
+    
+    if as_on_date:
+        date_filter = {"date": {"$lte": as_on_date}}
+        period_label = f"As on {as_on_date}"
+    elif fy:
+        fy_data = await db.financial_years.find_one({"id": fy}, {"_id": 0})
+        if fy_data:
+            date_filter = {"date": {"$gte": fy_data["start_date"], "$lte": fy_data["end_date"]}}
+            period_label = f"FY {fy_data['name']}"
     
     # ASSETS
-    # 1. Cash (from Cash Book - net balance)
-    all_transactions = await db.transactions.find({}, {"_id": 0}).to_list(100000)
-    cash_balance = 0
+    # 1. Cash (from Cash Book - net balance including opening balance)
+    setting = await db.settings.find_one({"key": "cash_opening_balance"}, {"_id": 0})
+    cash_opening = setting.get("value", 0) if setting else 0
+    
+    all_transactions = await db.transactions.find(date_filter, {"_id": 0}).to_list(100000) if date_filter else await db.transactions.find({}, {"_id": 0}).to_list(100000)
+    cash_balance = cash_opening
     for txn in all_transactions:
         if txn["transaction_type"] == "credit":
             cash_balance += txn.get("amount", 0)
@@ -1207,7 +1277,8 @@ async def get_simple_balance_sheet():
     chit_won = sum(c.get("won_amount", 0) for c in chits if c.get("is_won"))
     
     return {
-        "as_on_date": datetime.now().strftime("%Y-%m-%d"),
+        "as_on_date": as_on_date or datetime.now().strftime("%Y-%m-%d"),
+        "period": period_label,
         "assets": {
             "current_assets": {
                 "cash_balance": cash_balance,
@@ -1526,7 +1597,6 @@ async def get_chit_summary():
     chits = await db.chit_funds.find({}, {"_id": 0}).to_list(1000)
     
     active_chits = [c for c in chits if c.get("is_active", True)]
-    completed_chits = [c for c in chits if not c.get("is_active", True)]
     won_chits = [c for c in chits if c.get("is_won", False)]
     
     total_invested = sum(c.get("total_paid", 0) for c in chits)
@@ -2029,8 +2099,8 @@ async def get_balance_sheet(as_on_date: Optional[str] = None):
             "total": total_assets
         },
         "liabilities": {
-            "current_liabilities": [l for l in liability_items if l["sub_type"] == "current_liability"],
-            "long_term_liabilities": [l for l in liability_items if l["sub_type"] == "long_term_liability"],
+            "current_liabilities": [item for item in liability_items if item["sub_type"] == "current_liability"],
+            "long_term_liabilities": [item for item in liability_items if item["sub_type"] == "long_term_liability"],
             "total": total_liabilities
         },
         "capital": {

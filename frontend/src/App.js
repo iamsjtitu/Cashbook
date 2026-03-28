@@ -1,7 +1,9 @@
-import { useState, Component } from "react";
+import { useState, Component, useEffect, createContext, useContext } from "react";
+import axios from "axios";
 import "@/App.css";
 import { BrowserRouter, Routes, Route, NavLink, useLocation } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 // Pages
 import Dashboard from "@/pages/Dashboard";
@@ -24,6 +26,13 @@ import ProfitLossStatement from "@/pages/ProfitLossStatement";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 export const API = `${BACKEND_URL}/api`;
+
+// Financial Year Context
+export const FYContext = createContext({
+  activeFY: null,
+  financialYears: [],
+  setActiveFY: () => {}
+});
 
 // Error Boundary
 class ErrorBoundary extends Component {
@@ -48,7 +57,7 @@ class ErrorBoundary extends Component {
 }
 
 // Top Header
-const TopHeader = ({ onWhatsNewClick }) => {
+const TopHeader = ({ onWhatsNewClick, activeFY, financialYears, onFYChange }) => {
   return (
     <header className="top-header">
       <div className="company-info">
@@ -57,12 +66,30 @@ const TopHeader = ({ onWhatsNewClick }) => {
       </div>
       
       <div className="header-actions">
-        <div className="header-btn">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-          2025-2026
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="header-btn" data-testid="fy-selector">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              FY {activeFY?.name || '2025-26'}
+              <svg className="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="bg-white rounded-lg shadow-lg border">
+            {financialYears.map(fy => (
+              <DropdownMenuItem 
+                key={fy.id} 
+                onClick={() => onFYChange(fy)}
+                className={`cursor-pointer hover:bg-gray-50 px-3 py-2 ${fy.id === activeFY?.id ? 'bg-orange-50 text-orange-600' : ''}`}
+              >
+                FY {fy.name} {fy.is_active && '✓'}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
         
         <div className="header-btn">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -202,40 +229,76 @@ const Footer = () => {
 
 function App() {
   const [showWhatsNew, setShowWhatsNew] = useState(false);
+  const [activeFY, setActiveFY] = useState(null);
+  const [financialYears, setFinancialYears] = useState([]);
+
+  useEffect(() => {
+    const fetchFY = async () => {
+      try {
+        const [activeRes, allRes] = await Promise.all([
+          axios.get(`${API}/financial-years/active`),
+          axios.get(`${API}/financial-years`)
+        ]);
+        setActiveFY(activeRes.data);
+        setFinancialYears(allRes.data.length > 0 ? allRes.data : [activeRes.data]);
+      } catch (err) {
+        console.error("Error fetching FY:", err);
+      }
+    };
+    fetchFY();
+  }, []);
+
+  const handleFYChange = async (fy) => {
+    try {
+      await axios.put(`${API}/financial-years/${fy.id}/activate`);
+      setActiveFY(fy);
+      // Update list to reflect new active status
+      setFinancialYears(prev => prev.map(f => ({...f, is_active: f.id === fy.id})));
+    } catch (err) {
+      console.error("Error changing FY:", err);
+    }
+  };
 
   return (
-    <div className="app-container">
-      <ErrorBoundary>
-        <BrowserRouter>
-          <TopHeader onWhatsNewClick={() => setShowWhatsNew(true)} />
-          <MainNav />
-          
-          <div className="content-area">
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/staff" element={<StaffList />} />
-              <Route path="/attendance" element={<Attendance />} />
-              <Route path="/salary" element={<SalaryCalculator />} />
-              <Route path="/report" element={<MonthlyReport />} />
-              <Route path="/advance" element={<Advance />} />
-              <Route path="/cashbook" element={<CashBook />} />
-              <Route path="/parties" element={<PartyLedger />} />
-              <Route path="/interest" element={<InterestByaj />} />
-              <Route path="/expenses" element={<Expenses />} />
-              <Route path="/reports" element={<AccountingReports />} />
-              <Route path="/chitfund" element={<ChitFund />} />
-              <Route path="/profit-loss" element={<ProfitLossStatement />} />
-              <Route path="/balance-sheet" element={<BalanceSheet />} />
-            </Routes>
-          </div>
-          
-          <Footer />
-          
-          {showWhatsNew && <WhatsNew onClose={() => setShowWhatsNew(false)} />}
-        </BrowserRouter>
-        <Toaster position="top-right" richColors />
-      </ErrorBoundary>
-    </div>
+    <FYContext.Provider value={{ activeFY, financialYears, setActiveFY }}>
+      <div className="app-container">
+        <ErrorBoundary>
+          <BrowserRouter>
+            <TopHeader 
+              onWhatsNewClick={() => setShowWhatsNew(true)}
+              activeFY={activeFY}
+              financialYears={financialYears}
+              onFYChange={handleFYChange}
+            />
+            <MainNav />
+            
+            <div className="content-area">
+              <Routes>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/staff" element={<StaffList />} />
+                <Route path="/attendance" element={<Attendance />} />
+                <Route path="/salary" element={<SalaryCalculator />} />
+                <Route path="/report" element={<MonthlyReport />} />
+                <Route path="/advance" element={<Advance />} />
+                <Route path="/cashbook" element={<CashBook />} />
+                <Route path="/parties" element={<PartyLedger />} />
+                <Route path="/interest" element={<InterestByaj />} />
+                <Route path="/expenses" element={<Expenses />} />
+                <Route path="/reports" element={<AccountingReports />} />
+                <Route path="/chitfund" element={<ChitFund />} />
+                <Route path="/profit-loss" element={<ProfitLossStatement />} />
+                <Route path="/balance-sheet" element={<BalanceSheet />} />
+              </Routes>
+            </div>
+            
+            <Footer />
+            
+            {showWhatsNew && <WhatsNew onClose={() => setShowWhatsNew(false)} />}
+          </BrowserRouter>
+          <Toaster position="top-right" richColors />
+        </ErrorBoundary>
+      </div>
+    </FYContext.Provider>
   );
 }
 

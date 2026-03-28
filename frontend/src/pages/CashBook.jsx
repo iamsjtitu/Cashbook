@@ -13,6 +13,8 @@ const CashBook = () => {
   const [parties, setParties] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showOBModal, setShowOBModal] = useState(false);
+  const [openingBalance, setOpeningBalance] = useState({ amount: 0, as_on_date: "2025-04-01" });
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [formData, setFormData] = useState({
     date: format(new Date(), "yyyy-MM-dd"),
@@ -23,7 +25,14 @@ const CashBook = () => {
     description: ""
   });
 
-  useEffect(() => { fetchData(); }, [selectedDate]);
+  useEffect(() => { fetchData(); fetchOB(); }, [selectedDate]);
+
+  const fetchOB = async () => {
+    try {
+      const res = await axios.get(`${API}/cashbook/opening-balance`);
+      setOpeningBalance({ amount: res.data.opening_balance, as_on_date: res.data.as_on_date });
+    } catch (err) { console.error(err); }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -69,6 +78,18 @@ const CashBook = () => {
     }
   };
 
+  const handleSaveOB = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.post(`${API}/cashbook/opening-balance?amount=${openingBalance.amount}&as_on_date=${openingBalance.as_on_date}`);
+      toast.success("Opening Balance saved!");
+      setShowOBModal(false);
+      fetchData();
+    } catch (err) {
+      toast.error("Failed to save");
+    }
+  };
+
   const paymentModeLabel = { cash: "Cash", upi: "UPI", bank_transfer: "Bank" };
 
   if (loading) return <div className="text-center py-8">Loading...</div>;
@@ -91,6 +112,11 @@ const CashBook = () => {
         <button onClick={() => { setFormData({...formData, date: selectedDate}); setShowModal(true); }} className="action-btn success" data-testid="add-transaction-btn">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
           Add Entry
+        </button>
+
+        <button onClick={() => setShowOBModal(true)} className="action-btn outline-primary" data-testid="set-opening-balance-btn">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+          Opening Balance
         </button>
       </div>
 
@@ -220,6 +246,51 @@ const CashBook = () => {
                 <button type="submit" className={`btn ${formData.transaction_type === 'credit' ? 'btn-success' : 'btn-danger'}`}>
                   Add {formData.transaction_type === 'credit' ? 'Credit' : 'Debit'}
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Opening Balance Modal */}
+      {showOBModal && (
+        <div className="modal-overlay" onClick={() => setShowOBModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="modal-title">Set Cash Opening Balance</div>
+              <button className="modal-close" onClick={() => setShowOBModal(false)}>&times;</button>
+            </div>
+            <form onSubmit={handleSaveOB}>
+              <div className="modal-body">
+                <div className="bg-blue-50 border-l-4 border-blue-400 p-3 mb-4">
+                  <p className="text-sm text-blue-700">
+                    <strong>Opening Balance</strong> woh cash amount hai jo Financial Year ke shuruwat me aapke paas thi. 
+                    Ye Balance Sheet me include hogi.
+                  </p>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">As on Date (FY Start)</label>
+                  <input 
+                    type="date" 
+                    className="form-control" 
+                    value={openingBalance.as_on_date} 
+                    onChange={(e) => setOpeningBalance({...openingBalance, as_on_date: e.target.value})} 
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Opening Cash Balance (₹)</label>
+                  <input 
+                    type="number" 
+                    className="form-control text-xl font-bold" 
+                    value={openingBalance.amount} 
+                    onChange={(e) => setOpeningBalance({...openingBalance, amount: parseFloat(e.target.value) || 0})} 
+                    placeholder="0" 
+                  />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" onClick={() => setShowOBModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-success">Save</button>
               </div>
             </form>
           </div>

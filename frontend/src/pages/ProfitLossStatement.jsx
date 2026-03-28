@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import axios from "axios";
-import { API } from "@/App";
+import { API, FYContext } from "@/App";
 import { format, subMonths } from "date-fns";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
@@ -19,7 +19,10 @@ const EXPENSE_CATEGORIES = {
 };
 
 const ProfitLossStatement = () => {
+  const { activeFY, financialYears } = useContext(FYContext);
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), "yyyy-MM"));
+  const [selectedFY, setSelectedFY] = useState(null);
+  const [filterType, setFilterType] = useState("month"); // "month" or "fy"
   const [plData, setPlData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -32,14 +35,17 @@ const ProfitLossStatement = () => {
     return months;
   };
 
-  useEffect(() => { fetchData(); }, [selectedMonth]);
+  useEffect(() => { fetchData(); }, [selectedMonth, selectedFY, filterType]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const url = selectedMonth 
-        ? `${API}/reports/simple-profit-loss?month=${selectedMonth}`
-        : `${API}/reports/simple-profit-loss`;
+      let url = `${API}/reports/simple-profit-loss`;
+      if (filterType === "month" && selectedMonth) {
+        url += `?month=${selectedMonth}`;
+      } else if (filterType === "fy" && selectedFY) {
+        url += `?fy=${selectedFY}`;
+      }
       const res = await axios.get(url);
       setPlData(res.data);
     } catch (error) {
@@ -57,27 +63,74 @@ const ProfitLossStatement = () => {
   return (
     <div className="animate-fade-in" data-testid="profit-loss-page">
       <div className="action-bar">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="dropdown-trigger">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-              <span className="font-medium">{monthOptions.find(m => m.value === selectedMonth)?.label || "All Time"}</span>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="bg-white rounded-lg shadow-lg border max-h-60 overflow-auto">
-            {monthOptions.map((month) => (
-              <DropdownMenuItem key={month.value} onClick={() => setSelectedMonth(month.value)} className="cursor-pointer hover:bg-gray-50 px-3 py-2">
-                {month.label}
+        {/* Filter Type Toggle */}
+        <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+          <button 
+            className={`px-3 py-1 rounded-md text-sm font-medium transition ${filterType === 'month' ? 'bg-white shadow text-orange-600' : 'text-gray-600'}`}
+            onClick={() => setFilterType('month')}
+          >
+            Monthly
+          </button>
+          <button 
+            className={`px-3 py-1 rounded-md text-sm font-medium transition ${filterType === 'fy' ? 'bg-white shadow text-orange-600' : 'text-gray-600'}`}
+            onClick={() => setFilterType('fy')}
+          >
+            Financial Year
+          </button>
+        </div>
+
+        {/* Month Filter */}
+        {filterType === 'month' && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="dropdown-trigger">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                <span className="font-medium">{monthOptions.find(m => m.value === selectedMonth)?.label || "All Time"}</span>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="bg-white rounded-lg shadow-lg border max-h-60 overflow-auto">
+              {monthOptions.map((month) => (
+                <DropdownMenuItem key={month.value} onClick={() => setSelectedMonth(month.value)} className="cursor-pointer hover:bg-gray-50 px-3 py-2">
+                  {month.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+
+        {/* FY Filter */}
+        {filterType === 'fy' && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="dropdown-trigger">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                <span className="font-medium">{financialYears.find(f => f.id === selectedFY)?.name || activeFY?.name || "Select FY"}</span>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="bg-white rounded-lg shadow-lg border">
+              <DropdownMenuItem onClick={() => setSelectedFY(null)} className="cursor-pointer hover:bg-gray-50 px-3 py-2">
+                All Time (पूरा समय)
               </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+              {financialYears.map((fy) => (
+                <DropdownMenuItem key={fy.id} onClick={() => setSelectedFY(fy.id)} className="cursor-pointer hover:bg-gray-50 px-3 py-2">
+                  FY {fy.name} {fy.is_active && '✓'}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
 
         <button className="action-btn outline-primary">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
           Export PDF
         </button>
+      </div>
+
+      {/* Period Label */}
+      <div className="text-sm text-gray-500 mb-4">
+        Showing data for: <span className="font-bold text-gray-700">{plData?.period || plData?.month || "All Time"}</span>
       </div>
 
       {/* Summary Cards */}

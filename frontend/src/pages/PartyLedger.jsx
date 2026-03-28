@@ -11,6 +11,8 @@ const PartyLedger = () => {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [showLedger, setShowLedger] = useState(false);
+  const [showEditOB, setShowEditOB] = useState(false);
+  const [editOBData, setEditOBData] = useState({ party: null, opening_balance: "0" });
   const [formData, setFormData] = useState({ name: "", phone: "", address: "", opening_balance: "0", balance_type: "debit" });
 
   useEffect(() => { fetchParties(); }, []);
@@ -60,6 +62,25 @@ const PartyLedger = () => {
       fetchParties();
     } catch (error) {
       toast.error(error.response?.data?.detail || "Failed to delete");
+    }
+  };
+
+  const handleEditOB = (party) => {
+    setEditOBData({ party, opening_balance: party.opening_balance?.toString() || "0" });
+    setShowEditOB(true);
+  };
+
+  const handleUpdateOB = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.put(`${API}/parties/${editOBData.party.id}`, {
+        opening_balance: parseFloat(editOBData.opening_balance) || 0
+      });
+      toast.success("Opening Balance updated!");
+      setShowEditOB(false);
+      fetchParties();
+    } catch (error) {
+      toast.error("Failed to update");
     }
   };
 
@@ -137,6 +158,9 @@ const PartyLedger = () => {
                       <div className="flex gap-2">
                         <button onClick={() => fetchLedger(party.id)} className="text-blue-500 hover:text-blue-700" title="View Ledger">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                        </button>
+                        <button onClick={() => handleEditOB(party)} className="text-orange-500 hover:text-orange-700" title="Edit Opening Balance">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                         </button>
                         <button onClick={() => handleDelete(party.id)} className="text-red-500 hover:text-red-700" title="Delete">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
@@ -256,6 +280,45 @@ const PartyLedger = () => {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Opening Balance Modal */}
+      {showEditOB && editOBData.party && (
+        <div className="modal-overlay" onClick={() => setShowEditOB(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="modal-title">Edit Opening Balance - {editOBData.party.name}</div>
+              <button className="modal-close" onClick={() => setShowEditOB(false)}>&times;</button>
+            </div>
+            <form onSubmit={handleUpdateOB}>
+              <div className="modal-body">
+                <div className="bg-orange-50 border-l-4 border-orange-400 p-3 mb-4">
+                  <p className="text-sm text-orange-700">
+                    <strong>Opening Balance</strong> woh amount hai jo Financial Year ke shuruwat me party ka balance tha. 
+                    Isko change karne se current balance bhi adjust ho jayega.
+                  </p>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Opening Balance (₹)</label>
+                  <input 
+                    type="number" 
+                    className="form-control text-xl font-bold" 
+                    value={editOBData.opening_balance} 
+                    onChange={(e) => setEditOBData({...editOBData, opening_balance: e.target.value})} 
+                    placeholder="0" 
+                  />
+                </div>
+                <div className="text-sm text-gray-500 mt-2">
+                  Current Balance: ₹{editOBData.party.current_balance?.toLocaleString('en-IN')}
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" onClick={() => setShowEditOB(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-success">Update</button>
+              </div>
+            </form>
           </div>
         </div>
       )}
