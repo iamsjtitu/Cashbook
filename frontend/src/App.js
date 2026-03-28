@@ -316,7 +316,9 @@ const Footer = () => {
     <footer className="app-footer">
       <div className="footer-title">{settings.company_name} - <span>Attendance & Salary System</span></div>
       {settings.footer_text && <div className="footer-info">{settings.footer_text}</div>}
-      <div className="footer-credits">v1.0.0 | Built with Emergent</div>
+      <div className="footer-credits" style={{textAlign: 'center'}}>
+        Designed by: <a href="https://www.9x.design" target="_blank" rel="noopener noreferrer" style={{color: '#ff6b35'}}>9x.design</a> | Contact: +91 72059 30002
+      </div>
     </footer>
   );
 };

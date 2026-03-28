@@ -119,7 +119,7 @@ function createWindow() {
               type: 'info',
               title: 'About Staff Manager',
               message: 'Staff Manager v' + app.getVersion(),
-              detail: 'Attendance & Salary Management System\n\nSalary Calculation: Monthly ÷ 30 days\nHalf Day: Daily Rate ÷ 2\n\nBuilt with Electron'
+              detail: 'Attendance & Salary Management System\n\nDesigned by: https://www.9x.design\nContact: +91 72059 30002'
             });
           }
         }
