@@ -69,10 +69,10 @@
 - `POST /api/chit-funds/{id}/lift` - Lift (auto Cash Book credit)
 
 ## Testing Status
-- Backend: 100% (14/14 tests passed - iteration 11)
+- Backend: 100% (15/15 tests passed - iteration 12)
 - Frontend: 100% (All features verified)
 
-## Implementation Complete (March 2026)
+## Implementation Complete (December 2025)
 
 ### Done
 - [x] Staff management (CRUD, Attendance, Salary)
@@ -88,10 +88,14 @@
 - [x] P&L Statement (auto from Cash Book)
 - [x] Balance Sheet (auto from all modules)
 - [x] Financial Year (April-March) filtering
+- [x] **Password-only Login** (No username, default: 1234)
+- [x] **Password Change** option in Admin dropdown
+- [x] **Auto-Refresh** toggle (Manual/Auto 30s)
+- [x] **Electron Auto-Updater** (main.js + GitHub Actions workflow)
+- [x] Database cleared for fresh testing
 
-### Backlog
-- [ ] Electron Auto-Update
-- [ ] PDF Export
+### Backlog (P2)
+- [ ] PDF Export (Reports download)
 - [ ] Excel Export
 - [ ] Receipt Printing
 
