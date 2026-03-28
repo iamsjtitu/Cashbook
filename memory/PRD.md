@@ -69,8 +69,8 @@
 - `POST /api/chit-funds/{id}/lift` - Lift (auto Cash Book credit)
 
 ## Testing Status
-- Backend: 100% (iteration 15)
-- Frontend: 100% (iteration 16 - all filters working)
+- Backend: 100% (iteration 17)
+- Frontend: 100% (all features working)
 
 ## Implementation Complete (December 2025)
 
@@ -93,8 +93,8 @@
 - [x] **Auto-Refresh** toggle (Manual/Auto 30s)
 - [x] **Electron Auto-Updater** (main.js + GitHub Actions workflow)
 - [x] **Bulk Attendance Marking** (All Staff Today + Fill Unmarked)
-- [x] **PDF Export** (Staff, Attendance, Cash Book, Salary Slip)
-- [x] **Excel Export** (Staff, Attendance, Cash Book)
+- [x] **PDF Export** (Staff, Attendance, Cash Book, Salary Slip, Ledger Master)
+- [x] **Excel Export** (Staff, Attendance, Cash Book, Ledger Master)
 - [x] **Receipt Printing** (Salary & Advance payments)
 - [x] **Account Head (Category) System** - Ledgers categorized as Current Asset, Fixed Asset, Direct Expense, etc.
 - [x] **Sub-Ledger Hierarchy** - Parent Ledger option for creating sub-ledgers
@@ -110,6 +110,15 @@
 - [x] **Party Page Tabs:**
   - "Ledger Master" - Shows only leaf ledgers with PARENT column
   - "Parent Ledger" - Shows only parent ledgers with SUB-LEDGERS count
+- [x] **Ledger Master Filters:**
+  - Search by name
+  - From Date - To Date filter with Clear
+  - Excel and PDF export
+- [x] **Chit Fund Opening Balance:**
+  - Opening installments paid (पहले से paid)
+  - Opening amount paid
+  - Profit calculation (Expected - Actual = Profit So Far)
+  - Edit Opening button
 
 ## Account Head System (New)
 Ledgers can now be categorized with Account Heads:
