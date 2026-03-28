@@ -1098,6 +1098,151 @@ async def delete_expense(expense_id: str):
     await db.expenses.delete_one({"id": expense_id})
     return {"message": "Expense deleted"}
 
+# ==================== SIMPLIFIED P&L & BALANCE SHEET (Connected to existing system) ====================
+
+@api_router.get("/reports/simple-profit-loss")
+async def get_simple_profit_loss(month: Optional[str] = None):
+    """P&L based on existing Cash Book transactions"""
+    query = {}
+    if month:
+        query["date"] = {"$regex": f"^{month}"}
+    
+    # Get all transactions
+    transactions = await db.transactions.find(query, {"_id": 0}).to_list(100000)
+    
+    # Calculate totals
+    total_income = 0  # Credit transactions
+    total_expense = 0  # Debit transactions
+    
+    income_breakdown = {}
+    expense_breakdown = {}
+    
+    for txn in transactions:
+        amount = txn.get("amount", 0)
+        category = txn.get("category") or "other"
+        
+        if txn["transaction_type"] == "credit":
+            total_income += amount
+            income_breakdown[category] = income_breakdown.get(category, 0) + amount
+        else:  # debit
+            total_expense += amount
+            expense_breakdown[category] = expense_breakdown.get(category, 0) + amount
+    
+    # Get expenses summary too
+    expense_query = {"date": {"$regex": f"^{month}"}} if month else {}
+    expenses = await db.expenses.find(expense_query, {"_id": 0}).to_list(10000)
+    
+    expense_by_category = {}
+    for exp in expenses:
+        cat = exp.get("category", "other")
+        expense_by_category[cat] = expense_by_category.get(cat, 0) + exp.get("amount", 0)
+    
+    net_profit = total_income - total_expense
+    
+    return {
+        "month": month or "All Time",
+        "income": {
+            "total": total_income,
+            "breakdown": income_breakdown
+        },
+        "expenses": {
+            "total": total_expense,
+            "breakdown": expense_breakdown,
+            "by_category": expense_by_category
+        },
+        "net_profit": net_profit,
+        "is_profit": net_profit >= 0,
+        "transaction_count": len(transactions)
+    }
+
+@api_router.get("/reports/simple-balance-sheet")
+async def get_simple_balance_sheet():
+    """Balance Sheet based on existing Cash Book and Party Ledger"""
+    
+    # ASSETS
+    # 1. Cash (from Cash Book - net balance)
+    all_transactions = await db.transactions.find({}, {"_id": 0}).to_list(100000)
+    cash_balance = 0
+    for txn in all_transactions:
+        if txn["transaction_type"] == "credit":
+            cash_balance += txn.get("amount", 0)
+        else:
+            cash_balance -= txn.get("amount", 0)
+    
+    # 2. Debtors (Parties who owe us - positive balance)
+    parties = await db.parties.find({}, {"_id": 0}).to_list(10000)
+    total_debtors = sum(p.get("current_balance", 0) for p in parties if p.get("current_balance", 0) > 0)
+    debtors_list = [{"name": p["name"], "amount": p["current_balance"]} for p in parties if p.get("current_balance", 0) > 0]
+    
+    # 3. Advances given to staff
+    advances = await db.advances.find({}, {"_id": 0}).to_list(10000)
+    total_advances = sum(a.get("amount", 0) for a in advances)
+    
+    # 4. Chit Fund Investments
+    chits = await db.chit_funds.find({}, {"_id": 0}).to_list(1000)
+    total_chit_invested = sum(c.get("total_paid", 0) for c in chits)
+    
+    # 5. Interest Receivable (from interest accounts)
+    interest_accounts = await db.interest_accounts.find({"is_active": True}, {"_id": 0}).to_list(1000)
+    total_interest_receivable = sum(a.get("principal_amount", 0) for a in interest_accounts)
+    
+    total_assets = cash_balance + total_debtors + total_advances + total_chit_invested + total_interest_receivable
+    
+    # LIABILITIES
+    # 1. Creditors (Parties we owe - negative balance)
+    total_creditors = sum(abs(p.get("current_balance", 0)) for p in parties if p.get("current_balance", 0) < 0)
+    creditors_list = [{"name": p["name"], "amount": abs(p["current_balance"])} for p in parties if p.get("current_balance", 0) < 0]
+    
+    # 2. Staff Salaries Payable (calculated but not paid)
+    # For simplicity, assume all salaries are paid
+    salaries_payable = 0
+    
+    total_liabilities = total_creditors + salaries_payable
+    
+    # CAPITAL
+    # Net Worth = Assets - Liabilities
+    capital = total_assets - total_liabilities
+    
+    # Chit Fund Won (income that's part of capital)
+    chit_won = sum(c.get("won_amount", 0) for c in chits if c.get("is_won"))
+    
+    return {
+        "as_on_date": datetime.now().strftime("%Y-%m-%d"),
+        "assets": {
+            "current_assets": {
+                "cash_balance": cash_balance,
+                "debtors": {
+                    "total": total_debtors,
+                    "list": debtors_list[:10]  # Top 10
+                },
+                "advances_to_staff": total_advances,
+                "chit_fund_investment": total_chit_invested,
+                "interest_receivable": total_interest_receivable
+            },
+            "total": total_assets
+        },
+        "liabilities": {
+            "current_liabilities": {
+                "creditors": {
+                    "total": total_creditors,
+                    "list": creditors_list[:10]  # Top 10
+                },
+                "salaries_payable": salaries_payable
+            },
+            "total": total_liabilities
+        },
+        "capital": {
+            "net_worth": capital,
+            "chit_fund_won": chit_won
+        },
+        "summary": {
+            "total_assets": total_assets,
+            "total_liabilities": total_liabilities,
+            "net_worth": capital,
+            "is_balanced": True  # Assets = Liabilities + Capital by definition
+        }
+    }
+
 # Auto-link: Pay Salary API
 @api_router.post("/pay-salary/{staff_id}/{month}")
 async def pay_salary(staff_id: str, month: str, payment_mode: PaymentMode = PaymentMode.CASH):

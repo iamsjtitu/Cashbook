@@ -11,7 +11,7 @@ const BalanceSheet = () => {
 
   const fetchData = async () => {
     try {
-      const res = await axios.get(`${API}/reports/balance-sheet`);
+      const res = await axios.get(`${API}/reports/simple-balance-sheet`);
       setBalanceSheet(res.data);
     } catch (error) {
       console.error("Error:", error);
@@ -21,6 +21,10 @@ const BalanceSheet = () => {
   };
 
   if (loading) return <div className="text-center py-8">Loading...</div>;
+
+  const totalAssets = balanceSheet?.assets?.total || 0;
+  const totalLiabilities = balanceSheet?.liabilities?.total || 0;
+  const netWorth = balanceSheet?.capital?.net_worth || 0;
 
   return (
     <div className="animate-fade-in" data-testid="balance-sheet-page">
@@ -34,21 +38,31 @@ const BalanceSheet = () => {
         </button>
       </div>
 
-      {/* Balance Status */}
-      <div className={`p-4 rounded-lg mb-4 ${balanceSheet?.is_balanced ? 'bg-green-50 border-green-500' : 'bg-red-50 border-red-500'} border-l-4`}>
-        <div className="flex items-center gap-2">
-          {balanceSheet?.is_balanced ? (
-            <>
-              <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-              <span className="text-green-800 font-medium">Balance Sheet is Balanced (Assets = Liabilities + Capital)</span>
-            </>
-          ) : (
-            <>
-              <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-              <span className="text-red-800 font-medium">Balance Sheet is NOT Balanced!</span>
-            </>
-          )}
+      {/* Summary Cards */}
+      <div className="stats-row">
+        <div className="stat-box">
+          <div className="stat-box-label">Total Assets (संपत्ति)</div>
+          <div className="stat-box-value primary">₹{totalAssets.toLocaleString('en-IN')}</div>
         </div>
+        <div className="stat-box">
+          <div className="stat-box-label">Total Liabilities (देनदारी)</div>
+          <div className="stat-box-value danger">₹{totalLiabilities.toLocaleString('en-IN')}</div>
+        </div>
+        <div className="stat-box">
+          <div className="stat-box-label">Net Worth (कुल मूल्य)</div>
+          <div className={`stat-box-value ${netWorth >= 0 ? 'success' : 'danger'}`}>
+            ₹{netWorth.toLocaleString('en-IN')}
+          </div>
+        </div>
+      </div>
+
+      {/* Balance Sheet Formula */}
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-l-4 border-blue-500 p-4 rounded-lg mb-4">
+        <div className="flex items-center gap-2 text-blue-800">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          <span className="font-medium">Balance Sheet Formula: Assets = Liabilities + Capital (Net Worth)</span>
+        </div>
+        <p className="text-sm text-blue-700 mt-1">यह report आपके Cash Book, Party Ledger, Advances, Chit Fund और Interest accounts के data से automatically generate हो रही है।</p>
       </div>
 
       <div className="grid grid-cols-2 gap-6">
@@ -60,69 +74,61 @@ const BalanceSheet = () => {
           <div className="data-card-body p-0">
             <table className="data-table">
               <tbody>
-                {/* Capital */}
-                <tr className="bg-purple-50">
-                  <td colSpan="2" className="font-bold text-purple-700">Capital (पूंजी)</td>
-                </tr>
-                {balanceSheet?.capital?.items?.map((item, idx) => (
-                  <tr key={idx}>
-                    <td className="pl-6">{item.account_name}</td>
-                    <td className="text-right font-medium">₹{item.amount.toLocaleString('en-IN')}</td>
-                  </tr>
-                ))}
-                {(balanceSheet?.capital?.net_profit || 0) !== 0 && (
-                  <tr className={balanceSheet?.capital?.net_profit >= 0 ? 'text-green-600' : 'text-red-600'}>
-                    <td className="pl-6 font-medium">{balanceSheet?.capital?.net_profit >= 0 ? 'Add: Net Profit' : 'Less: Net Loss'}</td>
-                    <td className="text-right font-medium">₹{Math.abs(balanceSheet?.capital?.net_profit || 0).toLocaleString('en-IN')}</td>
-                  </tr>
-                )}
-                <tr className="bg-purple-100 font-bold">
-                  <td>Total Capital</td>
-                  <td className="text-right">₹{(balanceSheet?.capital?.total || 0).toLocaleString('en-IN')}</td>
-                </tr>
-
                 {/* Liabilities */}
                 <tr className="bg-red-50">
-                  <td colSpan="2" className="font-bold text-red-700">Liabilities (देनदारी)</td>
+                  <td colSpan="2" className="font-bold text-red-700">Current Liabilities (चालू देनदारी)</td>
                 </tr>
                 
-                {balanceSheet?.liabilities?.long_term_liabilities?.length > 0 && (
-                  <>
-                    <tr className="bg-gray-50">
-                      <td colSpan="2" className="font-medium text-gray-600 pl-4">Long-term Liabilities</td>
-                    </tr>
-                    {balanceSheet.liabilities.long_term_liabilities.map((item, idx) => (
-                      <tr key={idx}>
-                        <td className="pl-8">{item.account_name}</td>
-                        <td className="text-right font-medium">₹{item.amount.toLocaleString('en-IN')}</td>
-                      </tr>
-                    ))}
-                  </>
-                )}
+                <tr>
+                  <td className="pl-6">Creditors (देनदार)</td>
+                  <td className="text-right font-medium">₹{(balanceSheet?.liabilities?.current_liabilities?.creditors?.total || 0).toLocaleString('en-IN')}</td>
+                </tr>
                 
-                {balanceSheet?.liabilities?.current_liabilities?.length > 0 && (
-                  <>
-                    <tr className="bg-gray-50">
-                      <td colSpan="2" className="font-medium text-gray-600 pl-4">Current Liabilities</td>
-                    </tr>
-                    {balanceSheet.liabilities.current_liabilities.map((item, idx) => (
-                      <tr key={idx}>
-                        <td className="pl-8">{item.account_name}</td>
-                        <td className="text-right font-medium">₹{item.amount.toLocaleString('en-IN')}</td>
-                      </tr>
-                    ))}
-                  </>
+                {balanceSheet?.liabilities?.current_liabilities?.creditors?.list?.map((creditor, idx) => (
+                  <tr key={idx} className="text-sm text-gray-500">
+                    <td className="pl-10">- {creditor.name}</td>
+                    <td className="text-right">₹{creditor.amount.toLocaleString('en-IN')}</td>
+                  </tr>
+                ))}
+                
+                {balanceSheet?.liabilities?.current_liabilities?.salaries_payable > 0 && (
+                  <tr>
+                    <td className="pl-6">Salaries Payable</td>
+                    <td className="text-right font-medium">₹{balanceSheet.liabilities.current_liabilities.salaries_payable.toLocaleString('en-IN')}</td>
+                  </tr>
                 )}
                 
                 <tr className="bg-red-100 font-bold">
                   <td>Total Liabilities</td>
-                  <td className="text-right">₹{(balanceSheet?.liabilities?.total || 0).toLocaleString('en-IN')}</td>
+                  <td className="text-right">₹{totalLiabilities.toLocaleString('en-IN')}</td>
+                </tr>
+
+                {/* Capital */}
+                <tr className="bg-purple-50">
+                  <td colSpan="2" className="font-bold text-purple-700">Capital (पूंजी)</td>
+                </tr>
+                
+                <tr>
+                  <td className="pl-6">Net Worth (Owner's Capital)</td>
+                  <td className="text-right font-medium">₹{netWorth.toLocaleString('en-IN')}</td>
+                </tr>
+                
+                {(balanceSheet?.capital?.chit_fund_won || 0) > 0 && (
+                  <tr className="text-green-600">
+                    <td className="pl-8 text-sm">Includes: Chit Fund Won</td>
+                    <td className="text-right text-sm">₹{balanceSheet.capital.chit_fund_won.toLocaleString('en-IN')}</td>
+                  </tr>
+                )}
+                
+                <tr className="bg-purple-100 font-bold">
+                  <td>Total Capital</td>
+                  <td className="text-right">₹{netWorth.toLocaleString('en-IN')}</td>
                 </tr>
               </tbody>
               <tfoot className="bg-gray-200 font-bold text-lg">
                 <tr>
                   <td>TOTAL</td>
-                  <td className="text-right">₹{(balanceSheet?.total_liabilities_and_capital || 0).toLocaleString('en-IN')}</td>
+                  <td className="text-right">₹{(totalLiabilities + netWorth).toLocaleString('en-IN')}</td>
                 </tr>
               </tfoot>
             </table>
@@ -137,49 +143,81 @@ const BalanceSheet = () => {
           <div className="data-card-body p-0">
             <table className="data-table">
               <tbody>
-                {/* Fixed Assets */}
-                {balanceSheet?.assets?.fixed_assets?.length > 0 && (
-                  <>
-                    <tr className="bg-gray-50">
-                      <td colSpan="2" className="font-bold text-gray-700">Fixed Assets (स्थायी संपत्ति)</td>
-                    </tr>
-                    {balanceSheet.assets.fixed_assets.map((item, idx) => (
-                      <tr key={idx}>
-                        <td className="pl-6">{item.account_name}</td>
-                        <td className="text-right font-medium">₹{item.amount.toLocaleString('en-IN')}</td>
-                      </tr>
-                    ))}
-                  </>
-                )}
-
-                {/* Current Assets */}
-                {balanceSheet?.assets?.current_assets?.length > 0 && (
-                  <>
-                    <tr className="bg-gray-50">
-                      <td colSpan="2" className="font-bold text-gray-700">Current Assets (चालू संपत्ति)</td>
-                    </tr>
-                    {balanceSheet.assets.current_assets.map((item, idx) => (
-                      <tr key={idx}>
-                        <td className="pl-6">{item.account_name}</td>
-                        <td className="text-right font-medium">₹{item.amount.toLocaleString('en-IN')}</td>
-                      </tr>
-                    ))}
-                  </>
-                )}
-
+                <tr className="bg-blue-50">
+                  <td colSpan="2" className="font-bold text-blue-700">Current Assets (चालू संपत्ति)</td>
+                </tr>
+                
+                <tr>
+                  <td className="pl-6">Cash Balance (नकद शेष)</td>
+                  <td className={`text-right font-medium ${(balanceSheet?.assets?.current_assets?.cash_balance || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    ₹{(balanceSheet?.assets?.current_assets?.cash_balance || 0).toLocaleString('en-IN')}
+                  </td>
+                </tr>
+                
+                <tr>
+                  <td className="pl-6">Debtors (लेनदार - जो हमें देंगे)</td>
+                  <td className="text-right font-medium">₹{(balanceSheet?.assets?.current_assets?.debtors?.total || 0).toLocaleString('en-IN')}</td>
+                </tr>
+                
+                {balanceSheet?.assets?.current_assets?.debtors?.list?.map((debtor, idx) => (
+                  <tr key={idx} className="text-sm text-gray-500">
+                    <td className="pl-10">- {debtor.name}</td>
+                    <td className="text-right">₹{debtor.amount.toLocaleString('en-IN')}</td>
+                  </tr>
+                ))}
+                
+                <tr>
+                  <td className="pl-6">Advances to Staff (अग्रिम)</td>
+                  <td className="text-right font-medium">₹{(balanceSheet?.assets?.current_assets?.advances_to_staff || 0).toLocaleString('en-IN')}</td>
+                </tr>
+                
+                <tr>
+                  <td className="pl-6">Chit Fund Investment (चिट फंड)</td>
+                  <td className="text-right font-medium">₹{(balanceSheet?.assets?.current_assets?.chit_fund_investment || 0).toLocaleString('en-IN')}</td>
+                </tr>
+                
+                <tr>
+                  <td className="pl-6">Interest Receivable (ब्याज लेना)</td>
+                  <td className="text-right font-medium">₹{(balanceSheet?.assets?.current_assets?.interest_receivable || 0).toLocaleString('en-IN')}</td>
+                </tr>
+                
                 <tr className="bg-blue-100 font-bold">
                   <td>Total Assets</td>
-                  <td className="text-right">₹{(balanceSheet?.assets?.total || 0).toLocaleString('en-IN')}</td>
+                  <td className="text-right">₹{totalAssets.toLocaleString('en-IN')}</td>
                 </tr>
               </tbody>
               <tfoot className="bg-gray-200 font-bold text-lg">
                 <tr>
                   <td>TOTAL</td>
-                  <td className="text-right">₹{(balanceSheet?.assets?.total || 0).toLocaleString('en-IN')}</td>
+                  <td className="text-right">₹{totalAssets.toLocaleString('en-IN')}</td>
                 </tr>
               </tfoot>
             </table>
           </div>
+        </div>
+      </div>
+
+      {/* Balance Check */}
+      <div className={`mt-6 p-4 rounded-lg ${Math.abs(totalAssets - (totalLiabilities + netWorth)) < 1 ? 'bg-green-100' : 'bg-red-100'}`}>
+        <div className="flex items-center justify-center gap-2">
+          {Math.abs(totalAssets - (totalLiabilities + netWorth)) < 1 ? (
+            <>
+              <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              <span className="text-green-800 font-medium">Balance Sheet is BALANCED! ✓</span>
+            </>
+          ) : (
+            <>
+              <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              <span className="text-red-800 font-medium">Balance Sheet is NOT balanced!</span>
+            </>
+          )}
+        </div>
+        <div className="text-center text-sm mt-2">
+          <span className="text-blue-600">Assets: ₹{totalAssets.toLocaleString('en-IN')}</span>
+          <span className="mx-2">=</span>
+          <span className="text-red-600">Liabilities: ₹{totalLiabilities.toLocaleString('en-IN')}</span>
+          <span className="mx-2">+</span>
+          <span className="text-purple-600">Capital: ₹{netWorth.toLocaleString('en-IN')}</span>
         </div>
       </div>
     </div>

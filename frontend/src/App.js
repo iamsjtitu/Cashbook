@@ -18,10 +18,7 @@ import Expenses from "@/pages/Expenses";
 import InterestByaj from "@/pages/InterestByaj";
 import AccountingReports from "@/pages/AccountingReports";
 import ChitFund from "@/pages/ChitFund";
-// Proper Accounting Pages
-import ChartOfAccounts from "@/pages/ChartOfAccounts";
-import JournalEntry from "@/pages/JournalEntry";
-import TrialBalance from "@/pages/TrialBalance";
+// Financial Reports
 import BalanceSheet from "@/pages/BalanceSheet";
 import ProfitLossStatement from "@/pages/ProfitLossStatement";
 
@@ -175,27 +172,6 @@ const MainNav = () => {
         Chit Fund
       </NavLink>
       
-      <NavLink to="/accounts" className={`nav-item ${location.pathname === '/accounts' ? 'active' : ''}`}>
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
-        Accounts
-      </NavLink>
-      
-      <NavLink to="/voucher" className={`nav-item ${location.pathname === '/voucher' ? 'active' : ''}`}>
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-        </svg>
-        Voucher
-      </NavLink>
-      
-      <NavLink to="/trial-balance" className={`nav-item ${location.pathname === '/trial-balance' ? 'active' : ''}`}>
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
-        </svg>
-        Trial Balance
-      </NavLink>
-      
       <NavLink to="/profit-loss" className={`nav-item ${location.pathname === '/profit-loss' ? 'active' : ''}`}>
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
@@ -248,9 +224,6 @@ function App() {
               <Route path="/expenses" element={<Expenses />} />
               <Route path="/reports" element={<AccountingReports />} />
               <Route path="/chitfund" element={<ChitFund />} />
-              <Route path="/accounts" element={<ChartOfAccounts />} />
-              <Route path="/voucher" element={<JournalEntry />} />
-              <Route path="/trial-balance" element={<TrialBalance />} />
               <Route path="/profit-loss" element={<ProfitLossStatement />} />
               <Route path="/balance-sheet" element={<BalanceSheet />} />
             </Routes>
