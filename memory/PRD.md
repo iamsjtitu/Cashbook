@@ -69,8 +69,8 @@
 - `POST /api/chit-funds/{id}/lift` - Lift (auto Cash Book credit)
 
 ## Testing Status
-- Backend: 100% (15/15 tests passed - iteration 12)
-- Frontend: 100% (11/11 export features tested - iteration 13)
+- Backend: 100% (10/10 accounting hierarchy tests + previous tests - iteration 14)
+- Frontend: 100% (All features verified)
 
 ## Implementation Complete (December 2025)
 
@@ -85,8 +85,8 @@
 - [x] Party Ledger with balance tracking
 - [x] Expense category tracking
 - [x] Chit Fund dividend system
-- [x] P&L Statement (auto from Cash Book)
-- [x] Balance Sheet (auto from all modules)
+- [x] P&L Statement (auto from Cash Book + Ledger hierarchy)
+- [x] Balance Sheet (auto from all modules + Ledger hierarchy)
 - [x] Financial Year (April-March) filtering
 - [x] **Password-only Login** (No username, default: 1234)
 - [x] **Password Change** option in Admin dropdown
@@ -96,11 +96,30 @@
 - [x] **PDF Export** (Staff, Attendance, Cash Book, Salary Slip)
 - [x] **Excel Export** (Staff, Attendance, Cash Book)
 - [x] **Receipt Printing** (Salary & Advance payments)
+- [x] **Account Head (Category) System** - Ledgers categorized as Current Asset, Fixed Asset, Direct Expense, etc.
+- [x] **Sub-Ledger Hierarchy** - Parent Ledger option for creating sub-ledgers
+- [x] **Custom Expense Categories** - Create/delete custom expense categories
+- [x] **Expenses Page in Navigation** - Now visible in main menu
+
+## Account Head System (New)
+Ledgers can now be categorized with Account Heads:
+
+| Account Head | Type | Appears In |
+|--------------|------|------------|
+| Current Asset (चालू संपत्ति) | Asset | Balance Sheet - Assets |
+| Fixed Asset (स्थायी संपत्ति) | Asset | Balance Sheet - Assets |
+| Current Liability (चालू देनदारी) | Liability | Balance Sheet - Liabilities |
+| Long Term Liability (दीर्घकालिक देनदारी) | Liability | Balance Sheet - Liabilities |
+| Capital (पूंजी) | Capital | Balance Sheet - Capital |
+| Direct Income (प्रत्यक्ष आय) | Income | P&L - Income |
+| Indirect Income (अप्रत्यक्ष आय) | Income | P&L - Income |
+| Direct Expense (प्रत्यक्ष खर्च) | Expense | P&L - Expenses |
+| Indirect Expense (अप्रत्यक्ष खर्च) | Expense | P&L - Expenses |
 
 ### Backlog (Future)
-- [ ] More detailed P&L categories
 - [ ] Multi-user support
 - [ ] Mobile app
+- [ ] Cloud backup
 
 ## User Language
 - Primary: Hindi / Hinglish
