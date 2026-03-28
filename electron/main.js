@@ -179,10 +179,16 @@ function setupMenu() {
 
 // Initialize database with selected folder
 function initDatabase(folderPath) {
-  // Set the data folder path for database
-  process.env.STAFF_MANAGER_DATA = folderPath;
+  // Create folder if not exists
+  if (!fs.existsSync(folderPath)) {
+    fs.mkdirSync(folderPath, { recursive: true });
+  }
+  
+  // Delete cached require and reload
+  delete require.cache[require.resolve('./database')];
   db = require('./database');
   db.initDbPath(folderPath);
+  console.log('Database initialized at:', folderPath);
 }
 
 // IPC Handlers for folder selection

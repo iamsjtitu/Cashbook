@@ -7,6 +7,8 @@ let dbPath;
 // Initialize database path
 function initDbPath(customPath = null) {
   dbPath = customPath || path.join(app.getPath('userData'), 'StaffManagerData');
+  // Reset db so it reinitializes with new path
+  db = {};
 }
 
 // Create datastores
