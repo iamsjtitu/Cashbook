@@ -132,6 +132,16 @@ const PartyLedger = () => {
     return parent?.name || "-";
   };
 
+  // Get count of sub-ledgers for a party
+  const getSubLedgerCount = (partyId) => {
+    return parties.filter(p => p.parent_party_id === partyId).length;
+  };
+
+  // Check if party is a parent (has sub-ledgers)
+  const isParentLedger = (partyId) => {
+    return parties.some(p => p.parent_party_id === partyId);
+  };
+
   if (loading) return <div className="text-center py-8">Loading...</div>;
 
   return (
@@ -208,13 +218,23 @@ const PartyLedger = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredParties.map((party) => (
-                  <tr key={party.id}>
+                {filteredParties.map((party) => {
+                  const subCount = getSubLedgerCount(party.id);
+                  const isParent = subCount > 0;
+                  return (
+                  <tr key={party.id} className={isParent ? 'bg-blue-50' : ''}>
                     <td>
                       <div className="flex items-center gap-3">
-                        <div className="staff-avatar">{party.name.charAt(0)}</div>
+                        <div className={`staff-avatar ${isParent ? 'bg-blue-500' : ''}`}>{party.name.charAt(0)}</div>
                         <div>
-                          <div className="font-semibold">{party.name}</div>
+                          <div className="font-semibold flex items-center gap-2">
+                            {party.name}
+                            {isParent && (
+                              <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full">
+                                {subCount} Sub-ledgers
+                              </span>
+                            )}
+                          </div>
                           {party.phone && <div className="text-xs text-gray-500">{party.phone}</div>}
                         </div>
                       </div>
@@ -249,7 +269,7 @@ const PartyLedger = () => {
                     <td>
                       <div className="flex gap-2">
                         <button onClick={() => fetchLedger(party.id)} className="btn btn-secondary text-xs py-1 px-2">
-                          Ledger
+                          {isParent ? 'View All' : 'Ledger'}
                         </button>
                         <button onClick={() => handleEditOB(party)} className="btn btn-secondary text-xs py-1 px-2">
                           Edit OB
@@ -260,7 +280,8 @@ const PartyLedger = () => {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           )}
@@ -358,6 +379,21 @@ const PartyLedger = () => {
               <button className="modal-close" onClick={() => setShowLedger(false)}>&times;</button>
             </div>
             <div className="modal-body p-0">
+              {/* Sub-ledgers info */}
+              {ledgerData.sub_ledgers && ledgerData.sub_ledgers.length > 0 && (
+                <div className="bg-blue-50 p-3 border-b">
+                  <div className="text-xs text-blue-600 font-medium mb-2">
+                    Includes {ledgerData.sub_ledgers.length} Sub-ledgers:
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {ledgerData.sub_ledgers.map(sub => (
+                      <span key={sub.id} className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs">
+                        {sub.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="grid grid-cols-3 gap-4 p-4 bg-gray-50">
                 <div className="text-center">
                   <div className="text-xs text-gray-500">Opening Balance</div>

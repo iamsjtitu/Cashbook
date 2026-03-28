@@ -522,12 +522,90 @@ class ChitMonthlyEntry(ChitMonthlyEntryBase):
     transaction_id: Optional[str] = None  # Link to cash book (for EMI payment)
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
+# ==================== HELPER FUNCTIONS FOR AUTO-LINKING ====================
+
+async def get_or_create_parent_ledger(name: str, account_head: str) -> str:
+    """Get or create a parent ledger for auto-linking modules like Chit Fund, Staff Advance, etc."""
+    existing = await db.parties.find_one({"name": name, "account_head": account_head}, {"_id": 0})
+    if existing:
+        return existing["id"]
+    
+    # Create new parent ledger
+    party_id = str(uuid.uuid4())
+    party_doc = {
+        "id": party_id,
+        "name": name,
+        "phone": None,
+        "address": None,
+        "opening_balance": 0.0,
+        "balance_type": "debit",
+        "account_head": account_head,
+        "parent_party_id": None,
+        "current_balance": 0.0,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.parties.insert_one(party_doc)
+    return party_id
+
+async def get_or_create_sub_ledger(name: str, parent_name: str, parent_account_head: str) -> str:
+    """Get or create a sub-ledger under a parent ledger"""
+    # First ensure parent exists
+    parent_id = await get_or_create_parent_ledger(parent_name, parent_account_head)
+    
+    # Check if sub-ledger exists
+    existing = await db.parties.find_one({"name": name, "parent_party_id": parent_id}, {"_id": 0})
+    if existing:
+        return existing["id"]
+    
+    # Create new sub-ledger
+    party_id = str(uuid.uuid4())
+    party_doc = {
+        "id": party_id,
+        "name": name,
+        "phone": None,
+        "address": None,
+        "opening_balance": 0.0,
+        "balance_type": "debit",
+        "account_head": None,  # Sub-ledger inherits parent's account head
+        "parent_party_id": parent_id,
+        "current_balance": 0.0,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.parties.insert_one(party_doc)
+    return party_id
+
+async def update_party_balance(party_id: str, amount: float, is_debit: bool):
+    """Update party balance and also update parent's aggregated balance"""
+    party = await db.parties.find_one({"id": party_id}, {"_id": 0})
+    if not party:
+        return
+    
+    # Update this party's balance
+    current = party.get("current_balance", 0)
+    if is_debit:
+        new_balance = current + amount
+    else:
+        new_balance = current - amount
+    
+    await db.parties.update_one({"id": party_id}, {"$set": {"current_balance": new_balance}})
+    
+    # If this party has a parent, update parent's aggregated view (no direct balance change needed
+    # as parent ledger shows sum of all sub-ledgers when viewed)
+
 # Staff APIs
 @api_router.post("/staff", response_model=Staff)
 async def create_staff(staff: StaffCreate):
     staff_obj = Staff(**staff.model_dump())
     doc = staff_obj.model_dump()
     await db.staff.insert_one(doc)
+    
+    # Auto-create sub-ledger for staff under "Staff Advances" parent
+    await get_or_create_sub_ledger(
+        name=f"Staff - {staff.name}",
+        parent_name="Staff Advances",
+        parent_account_head="current_asset"
+    )
+    
     return staff_obj
 
 @api_router.get("/staff", response_model=List[Staff])
@@ -884,6 +962,23 @@ async def get_parties_grouped():
     
     return grouped
 
+# Get only leaf parties (no sub-ledgers under them) for transaction dropdowns
+# MUST be before /parties/{party_id} to avoid route conflict
+@api_router.get("/parties/leaf")
+async def get_leaf_parties():
+    """Get parties that don't have any sub-ledgers - for transaction entry"""
+    all_parties = await db.parties.find({}, {"_id": 0}).to_list(10000)
+    
+    # Find all parent_party_ids that have children
+    parent_ids_with_children = set()
+    for party in all_parties:
+        if party.get("parent_party_id"):
+            parent_ids_with_children.add(party["parent_party_id"])
+    
+    # Return only parties that are NOT parents (leaf nodes)
+    leaf_parties = [p for p in all_parties if p["id"] not in parent_ids_with_children]
+    return leaf_parties
+
 @api_router.get("/parties/{party_id}", response_model=Party)
 async def get_party(party_id: str):
     party = await db.parties.find_one({"id": party_id}, {"_id": 0})
@@ -950,26 +1045,44 @@ async def get_account_heads():
         ]
     }
 
-# Party Ledger API
+# Party Ledger API - Shows transactions including sub-ledgers
 @api_router.get("/parties/{party_id}/ledger")
 async def get_party_ledger(party_id: str):
     party = await db.parties.find_one({"id": party_id}, {"_id": 0})
     if not party:
         raise HTTPException(status_code=404, detail="Party not found")
     
+    # Get all party IDs to include (this party + all sub-ledgers)
+    party_ids = [party_id]
+    sub_parties = await db.parties.find({"parent_party_id": party_id}, {"_id": 0}).to_list(1000)
+    for sub in sub_parties:
+        party_ids.append(sub["id"])
+    
+    # Get transactions for this party and all sub-ledgers
     transactions = await db.transactions.find(
-        {"party_id": party_id}, {"_id": 0}
+        {"party_id": {"$in": party_ids}}, {"_id": 0}
     ).sort("date", 1).to_list(10000)
     
     ledger_entries = []
     running_balance = party.get("opening_balance", 0)
     
+    # Add opening balances from sub-ledgers
+    for sub in sub_parties:
+        running_balance += sub.get("opening_balance", 0)
+    
     for txn in transactions:
+        # Get sub-ledger name if transaction is from sub-ledger
+        txn_party_name = ""
+        if txn["party_id"] != party_id:
+            sub_party = next((s for s in sub_parties if s["id"] == txn["party_id"]), None)
+            if sub_party:
+                txn_party_name = f" [{sub_party['name']}]"
+        
         if txn["transaction_type"] == "debit":
             running_balance += txn["amount"]
             ledger_entries.append(LedgerEntry(
                 date=txn["date"],
-                description=txn["description"],
+                description=txn["description"] + txn_party_name,
                 debit=txn["amount"],
                 credit=0,
                 balance=running_balance,
@@ -980,7 +1093,7 @@ async def get_party_ledger(party_id: str):
             running_balance -= txn["amount"]
             ledger_entries.append(LedgerEntry(
                 date=txn["date"],
-                description=txn["description"],
+                description=txn["description"] + txn_party_name,
                 debit=0,
                 credit=txn["amount"],
                 balance=running_balance,
@@ -990,6 +1103,7 @@ async def get_party_ledger(party_id: str):
     
     return {
         "party": party,
+        "sub_ledgers": sub_parties,
         "opening_balance": party.get("opening_balance", 0),
         "current_balance": running_balance,
         "entries": [e.model_dump() for e in ledger_entries]
@@ -1006,6 +1120,15 @@ async def create_interest_account(account: InterestAccountCreate):
     account_obj = InterestAccount(**account.model_dump())
     doc = account_obj.model_dump()
     await db.interest_accounts.insert_one(doc)
+    
+    # Auto-create sub-ledger for interest account under "Byaj (Interest) Receivable" parent
+    party_name = party.get("name", "Unknown")
+    await get_or_create_sub_ledger(
+        name=f"Byaj - {party_name}",
+        parent_name="Byaj (Interest) Receivable",
+        parent_account_head="current_asset"
+    )
+    
     return account_obj
 
 @api_router.get("/interest-accounts", response_model=List[InterestAccount])
@@ -1660,6 +1783,14 @@ async def create_chit_fund(chit: ChitFundCreate):
     chit_obj = ChitFund(**chit.model_dump())
     doc = chit_obj.model_dump()
     await db.chit_funds.insert_one(doc)
+    
+    # Auto-create sub-ledger for chit fund under "Chit Fund Investment" parent
+    await get_or_create_sub_ledger(
+        name=f"Chit - {chit.name}",
+        parent_name="Chit Fund Investment",
+        parent_account_head="current_asset"
+    )
+    
     return chit_obj
 
 def migrate_chit_data(chit: dict) -> dict:

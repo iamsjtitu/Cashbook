@@ -49,8 +49,8 @@ const CashBook = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Fetch parties
-      const partiesRes = await axios.get(`${API}/parties`);
+      // Fetch leaf parties (parties without sub-ledgers) for transaction entry
+      const partiesRes = await axios.get(`${API}/parties/leaf`);
       setParties(partiesRes.data);
       
       // Fetch transactions based on date range
