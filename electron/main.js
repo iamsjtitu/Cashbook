@@ -76,8 +76,6 @@ function loadMainApp() {
     if (indexPath) {
       console.log('Loading from:', indexPath);
       mainWindow.loadFile(indexPath);
-      // Enable DevTools for debugging
-      mainWindow.webContents.openDevTools();
     } else {
       // Show error with all tried paths
       const errorHtml = `

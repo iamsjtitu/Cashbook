@@ -1,6 +1,6 @@
 import { useState, Component, useEffect, createContext } from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route, NavLink, useLocation } from "react-router-dom";
+import { HashRouter, Routes, Route, NavLink, useLocation } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
@@ -391,7 +391,7 @@ function App() {
     <FYContext.Provider value={{ activeFY, financialYears, setActiveFY }}>
       <div className="app-container">
         <ErrorBoundary>
-          <BrowserRouter>
+          <HashRouter>
             <TopHeader 
               onWhatsNewClick={() => setShowWhatsNew(true)}
               activeFY={activeFY}
@@ -428,7 +428,7 @@ function App() {
             
             {showWhatsNew && <WhatsNew onClose={() => setShowWhatsNew(false)} />}
             {showPasswordModal && <PasswordChangeModal onClose={() => setShowPasswordModal(false)} />}
-          </BrowserRouter>
+          </HashRouter>
           <Toaster position="top-right" richColors />
         </ErrorBoundary>
       </div>
