@@ -2,7 +2,12 @@ const { app, BrowserWindow, Menu, dialog, shell, ipcMain } = require('electron')
 const path = require('path');
 const fs = require('fs');
 const Store = require('electron-store');
+const { autoUpdater } = require('electron-updater');
 const db = require('./database');
+
+// Auto-updater config
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = true;
 
 const store = new Store({
   name: 'staff-manager-config',
@@ -108,6 +113,20 @@ function createWindow() {
       label: 'Help',
       submenu: [
         {
+          label: 'Check for Updates',
+          click: () => {
+            autoUpdater.checkForUpdates().catch(err => {
+              dialog.showMessageBox(mainWindow, {
+                type: 'error',
+                title: 'Update Error',
+                message: 'Could not check for updates',
+                detail: err.message
+              });
+            });
+          }
+        },
+        { type: 'separator' },
+        {
           label: 'About Staff Manager',
           click: () => {
             dialog.showMessageBox(mainWindow, {
@@ -123,6 +142,53 @@ function createWindow() {
   ]);
   Menu.setApplicationMenu(menu);
 }
+
+// Auto-updater events
+autoUpdater.on('checking-for-update', () => {
+  console.log('Checking for updates...');
+});
+
+autoUpdater.on('update-available', (info) => {
+  dialog.showMessageBox(mainWindow, {
+    type: 'info',
+    title: 'Update Available',
+    message: `New version ${info.version} available!`,
+    detail: 'Download and install now?',
+    buttons: ['Download', 'Later']
+  }).then((result) => {
+    if (result.response === 0) autoUpdater.downloadUpdate();
+  });
+});
+
+autoUpdater.on('update-not-available', () => {
+  dialog.showMessageBox(mainWindow, {
+    type: 'info',
+    title: 'No Updates',
+    message: 'You are using the latest version!',
+    detail: 'Current version: ' + app.getVersion()
+  });
+});
+
+autoUpdater.on('download-progress', (progress) => {
+  if (mainWindow) mainWindow.setProgressBar(progress.percent / 100);
+});
+
+autoUpdater.on('update-downloaded', () => {
+  if (mainWindow) mainWindow.setProgressBar(-1);
+  dialog.showMessageBox(mainWindow, {
+    type: 'info',
+    title: 'Update Ready',
+    message: 'Update downloaded!',
+    detail: 'App will restart to install.',
+    buttons: ['Restart Now', 'Later']
+  }).then((result) => {
+    if (result.response === 0) autoUpdater.quitAndInstall();
+  });
+});
+
+autoUpdater.on('error', (err) => {
+  console.error('Auto-update error:', err);
+});
 
 // IPC Handlers
 ipcMain.handle('auth:login', async (_, password) => await db.checkPassword(password));
@@ -245,6 +311,17 @@ ipcMain.handle('folder:open', (_, folderPath) => {
 ipcMain.handle('autoBackup:get', () => store.get('autoBackup'));
 ipcMain.handle('autoBackup:set', (_, settings) => { store.set('autoBackup', settings); return true; });
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+  
+  // Check for updates on startup (only in packaged app)
+  if (app.isPackaged) {
+    setTimeout(() => {
+      autoUpdater.checkForUpdates().catch(err => {
+        console.log('Auto-update check failed:', err.message);
+      });
+    }, 3000);
+  }
+});
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
