@@ -37,6 +37,7 @@ jobs:
         env:
           REACT_APP_BACKEND_URL: ''
           GENERATE_SOURCEMAP: false
+          CI: false
         run: yarn build
 
       - name: Copy React Build to Electron
