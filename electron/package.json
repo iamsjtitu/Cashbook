@@ -1,6 +1,6 @@
 {
   "name": "staff-manager",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Staff Attendance & Salary Management Desktop Application",
   "main": "main.js",
   "author": "Staff Manager",
@@ -26,6 +26,7 @@
     "files": [
       "main.js",
       "preload.js",
+      "database.js",
       "build/**/*",
       "node_modules/**/*"
     ],
