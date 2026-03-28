@@ -1,25 +1,17 @@
 const { app, BrowserWindow, Menu, dialog, shell, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { autoUpdater } = require('electron-updater');
 const Store = require('electron-store');
+const db = require('./database');
 
-// Initialize electron-store for persistent settings
+// Initialize electron-store for app settings
 const store = new Store({
   name: 'staff-manager-config',
   defaults: {
     dataFolder: '',
-    autoBackup: {
-      enabled: false,
-      frequency: 'daily',
-      lastBackup: null
-    }
+    autoBackup: { enabled: false, frequency: 'daily', lastBackup: null }
   }
 });
-
-// Configure auto-updater
-autoUpdater.autoDownload = false;
-autoUpdater.autoInstallOnAppQuit = true;
 
 let mainWindow;
 
@@ -40,7 +32,6 @@ function createWindow() {
     show: false
   });
 
-  // Load the app
   if (process.env.NODE_ENV === 'development') {
     mainWindow.loadURL('http://localhost:3000');
     mainWindow.webContents.openDevTools();
@@ -50,13 +41,6 @@ function createWindow() {
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
-    
-    const dataFolder = store.get('dataFolder');
-    if (!dataFolder) {
-      promptFolderSelection();
-    } else {
-      checkAutoBackup();
-    }
   });
 
   mainWindow.on('closed', () => {
@@ -69,21 +53,13 @@ function createWindow() {
       label: 'File',
       submenu: [
         {
-          label: 'Select Data Folder',
-          click: () => promptFolderSelection()
-        },
-        {
           label: 'Open Data Folder',
           click: () => {
-            const folder = store.get('dataFolder');
-            if (folder && fs.existsSync(folder)) {
-              shell.openPath(folder);
+            const dataPath = path.join(app.getPath('userData'), 'StaffManagerData');
+            if (fs.existsSync(dataPath)) {
+              shell.openPath(dataPath);
             } else {
-              dialog.showMessageBox(mainWindow, {
-                type: 'warning',
-                title: 'No Folder Set',
-                message: 'Data folder not set. Please select a folder first.'
-              });
+              shell.openPath(app.getPath('userData'));
             }
           }
         },
@@ -108,11 +84,6 @@ function createWindow() {
       label: 'Help',
       submenu: [
         {
-          label: 'Check for Updates',
-          click: () => checkForUpdates()
-        },
-        { type: 'separator' },
-        {
           label: 'About Staff Manager',
           click: () => {
             dialog.showMessageBox(mainWindow, {
@@ -127,158 +98,93 @@ function createWindow() {
     }
   ];
 
-  const menu = Menu.buildFromTemplate(menuTemplate);
-  Menu.setApplicationMenu(menu);
+  Menu.buildFromTemplate(menuTemplate);
+  Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate));
 }
 
-// Prompt user to select data folder
-function promptFolderSelection() {
-  dialog.showOpenDialog(mainWindow, {
-    title: 'Select Data Folder (Backup यहाँ save होगा)',
-    properties: ['openDirectory', 'createDirectory'],
-    buttonLabel: 'Select Folder'
-  }).then((result) => {
-    if (!result.canceled && result.filePaths.length > 0) {
-      const selectedPath = result.filePaths[0];
-      store.set('dataFolder', selectedPath);
-      
-      const backupsPath = path.join(selectedPath, 'StaffManager_Backups');
-      if (!fs.existsSync(backupsPath)) {
-        fs.mkdirSync(backupsPath, { recursive: true });
-      }
-      
-      dialog.showMessageBox(mainWindow, {
-        type: 'info',
-        title: 'Folder Selected',
-        message: 'Data folder set successfully!',
-        detail: `Path: ${selectedPath}\n\nBackups will be saved in: StaffManager_Backups subfolder`
-      });
-      
-      mainWindow.webContents.send('folder-selected', selectedPath);
-    }
-  });
-}
+// ============ IPC HANDLERS ============
 
-// Check and perform auto-backup
-function checkAutoBackup() {
-  const autoBackup = store.get('autoBackup');
-  if (!autoBackup.enabled) return;
-  
-  const lastBackup = autoBackup.lastBackup ? new Date(autoBackup.lastBackup) : null;
-  const now = new Date();
-  
-  let shouldBackup = false;
-  
-  if (!lastBackup) {
-    shouldBackup = true;
-  } else if (autoBackup.frequency === 'daily') {
-    shouldBackup = (now - lastBackup) > 24 * 60 * 60 * 1000;
-  } else if (autoBackup.frequency === 'weekly') {
-    shouldBackup = (now - lastBackup) > 7 * 24 * 60 * 60 * 1000;
+// Auth
+ipcMain.handle('auth:login', async (_, password) => {
+  return await db.checkPassword(password);
+});
+
+ipcMain.handle('auth:changePassword', async (_, current, newPass) => {
+  return await db.changePassword(current, newPass);
+});
+
+// Staff
+ipcMain.handle('staff:getAll', async () => await db.getAllStaff());
+ipcMain.handle('staff:getById', async (_, id) => await db.getStaffById(id));
+ipcMain.handle('staff:create', async (_, data) => await db.createStaff(data));
+ipcMain.handle('staff:update', async (_, id, data) => await db.updateStaff(id, data));
+ipcMain.handle('staff:delete', async (_, id) => await db.deleteStaff(id));
+
+// Attendance
+ipcMain.handle('attendance:getByDate', async (_, date) => await db.getAttendanceByDate(date));
+ipcMain.handle('attendance:getByStaffMonth', async (_, staffId, month) => await db.getAttendanceByStaffAndMonth(staffId, month));
+ipcMain.handle('attendance:mark', async (_, data) => await db.markAttendance(data));
+ipcMain.handle('attendance:bulkMark', async (_, records) => await db.bulkMarkAttendance(records));
+
+// Transactions (Cash Book)
+ipcMain.handle('transactions:getByMonth', async (_, month) => await db.getTransactionsByMonth(month));
+ipcMain.handle('transactions:create', async (_, data) => await db.createTransaction(data));
+
+// Parties (Ledger)
+ipcMain.handle('parties:getAll', async () => await db.getAllParties());
+ipcMain.handle('parties:getLeaf', async () => await db.getLeafParties());
+ipcMain.handle('parties:create', async (_, data) => await db.createParty(data));
+ipcMain.handle('parties:update', async (_, id, data) => await db.updateParty(id, data));
+ipcMain.handle('parties:delete', async (_, id) => {
+  try {
+    return await db.deleteParty(id);
+  } catch (e) {
+    return { error: e.message };
   }
-  
-  if (shouldBackup) {
-    mainWindow.webContents.send('perform-auto-backup');
-  }
-}
-
-// Auto-updater events
-autoUpdater.on('checking-for-update', () => {
-  console.log('Checking for updates...');
 });
+ipcMain.handle('parties:getLedger', async (_, id) => await db.getPartyLedger(id));
 
-autoUpdater.on('update-available', (info) => {
-  dialog.showMessageBox(mainWindow, {
-    type: 'info',
-    title: 'Update Available',
-    message: `New version ${info.version} available!`,
-    detail: 'Download and install now?',
-    buttons: ['Download', 'Later']
-  }).then((result) => {
-    if (result.response === 0) {
-      autoUpdater.downloadUpdate();
-    }
-  });
-});
+// Advances
+ipcMain.handle('advances:getAll', async () => await db.getAllAdvances());
+ipcMain.handle('advances:create', async (_, data) => await db.createAdvance(data));
 
-autoUpdater.on('update-not-available', () => {
-  dialog.showMessageBox(mainWindow, {
-    type: 'info',
-    title: 'No Updates',
-    message: 'You are using the latest version!',
-    detail: 'Current version: ' + app.getVersion()
-  });
-});
+// Salary
+ipcMain.handle('salary:calculate', async (_, staffId, month) => await db.calculateSalary(staffId, month));
+ipcMain.handle('salary:pay', async (_, data) => await db.paySalary(data));
 
-autoUpdater.on('download-progress', (progress) => {
-  mainWindow.setProgressBar(progress.percent / 100);
-});
+// Chit Fund
+ipcMain.handle('chitFunds:getAll', async () => await db.getAllChitFunds());
+ipcMain.handle('chitFunds:create', async (_, data) => await db.createChitFund(data));
+ipcMain.handle('chitFunds:addEntry', async (_, chitId, data) => await db.addChitEntry(chitId, data));
 
-autoUpdater.on('update-downloaded', (info) => {
-  mainWindow.setProgressBar(-1);
-  dialog.showMessageBox(mainWindow, {
-    type: 'info',
-    title: 'Update Ready',
-    message: 'Update downloaded!',
-    detail: 'App will restart to install.',
-    buttons: ['Restart Now', 'Later']
-  }).then((result) => {
-    if (result.response === 0) {
-      autoUpdater.quitAndInstall();
-    }
-  });
-});
+// Interest/Byaj
+ipcMain.handle('interest:getAll', async () => await db.getAllInterestAccounts());
+ipcMain.handle('interest:create', async (_, data) => await db.createInterestAccount(data));
 
-autoUpdater.on('error', (err) => {
-  console.error('Update error:', err);
-});
+// Expense Categories
+ipcMain.handle('expenseCategories:getAll', async () => await db.getExpenseCategories());
+ipcMain.handle('expenseCategories:add', async (_, name) => await db.addExpenseCategory(name));
 
-function checkForUpdates() {
-  autoUpdater.checkForUpdates().catch(err => {
-    dialog.showMessageBox(mainWindow, {
-      type: 'error',
-      title: 'Update Error',
-      message: 'Could not check for updates',
-      detail: err.message
-    });
-  });
-}
+// Financial Year
+ipcMain.handle('financialYears:getAll', async () => await db.getFinancialYears());
+ipcMain.handle('financialYears:getActive', async () => await db.getActiveFY());
 
-// IPC Handlers
-ipcMain.handle('get-data-folder', () => store.get('dataFolder'));
+// Settings
+ipcMain.handle('settings:get', async () => await db.getSettings());
+ipcMain.handle('settings:save', async (_, data) => await db.saveSettings(data));
 
-ipcMain.handle('select-data-folder', async () => {
-  const result = await dialog.showOpenDialog(mainWindow, {
-    title: 'Select Data Folder',
-    properties: ['openDirectory', 'createDirectory'],
-    buttonLabel: 'Select Folder'
-  });
-  
-  if (!result.canceled && result.filePaths.length > 0) {
-    const selectedPath = result.filePaths[0];
-    store.set('dataFolder', selectedPath);
-    
-    const backupsPath = path.join(selectedPath, 'StaffManager_Backups');
-    if (!fs.existsSync(backupsPath)) {
-      fs.mkdirSync(backupsPath, { recursive: true });
-    }
-    return selectedPath;
-  }
-  return null;
-});
+// Reports
+ipcMain.handle('reports:expenses', async (_, month) => await db.getExpensesSummary(month));
+ipcMain.handle('reports:profitLoss', async () => await db.getProfitLoss());
 
-ipcMain.handle('get-auto-backup-settings', () => store.get('autoBackup'));
+// Backup
+ipcMain.handle('backup:export', async () => await db.exportAllData());
+ipcMain.handle('backup:import', async (_, data) => await db.importAllData(data));
 
-ipcMain.handle('set-auto-backup-settings', (event, settings) => {
-  store.set('autoBackup', settings);
-  return true;
-});
-
-ipcMain.handle('save-backup-to-folder', async (event, backupData) => {
-  const dataFolder = store.get('dataFolder');
-  if (!dataFolder) return { success: false, error: 'No data folder set' };
-  
+ipcMain.handle('backup:saveToFile', async (_, backupData) => {
+  const dataFolder = store.get('dataFolder') || app.getPath('userData');
   const backupsPath = path.join(dataFolder, 'StaffManager_Backups');
+  
   if (!fs.existsSync(backupsPath)) {
     fs.mkdirSync(backupsPath, { recursive: true });
   }
@@ -289,22 +195,16 @@ ipcMain.handle('save-backup-to-folder', async (event, backupData) => {
   
   try {
     fs.writeFileSync(filepath, JSON.stringify(backupData, null, 2), 'utf8');
-    
-    const autoBackup = store.get('autoBackup');
-    autoBackup.lastBackup = new Date().toISOString();
-    store.set('autoBackup', autoBackup);
-    
     return { success: true, path: filepath, filename };
   } catch (err) {
     return { success: false, error: err.message };
   }
 });
 
-ipcMain.handle('get-backup-files', async () => {
-  const dataFolder = store.get('dataFolder');
-  if (!dataFolder) return [];
-  
+ipcMain.handle('backup:getFiles', async () => {
+  const dataFolder = store.get('dataFolder') || app.getPath('userData');
   const backupsPath = path.join(dataFolder, 'StaffManager_Backups');
+  
   if (!fs.existsSync(backupsPath)) return [];
   
   try {
@@ -312,12 +212,7 @@ ipcMain.handle('get-backup-files', async () => {
       .filter(f => f.endsWith('.json'))
       .map(f => {
         const stats = fs.statSync(path.join(backupsPath, f));
-        return {
-          name: f,
-          path: path.join(backupsPath, f),
-          size: stats.size,
-          created: stats.birthtime
-        };
+        return { name: f, path: path.join(backupsPath, f), size: stats.size, created: stats.birthtime };
       })
       .sort((a, b) => new Date(b.created) - new Date(a.created));
   } catch (err) {
@@ -325,7 +220,7 @@ ipcMain.handle('get-backup-files', async () => {
   }
 });
 
-ipcMain.handle('read-backup-file', async (event, filepath) => {
+ipcMain.handle('backup:readFile', async (_, filepath) => {
   try {
     const content = fs.readFileSync(filepath, 'utf8');
     return { success: true, data: JSON.parse(content) };
@@ -334,7 +229,20 @@ ipcMain.handle('read-backup-file', async (event, filepath) => {
   }
 });
 
-ipcMain.handle('open-folder', (event, folderPath) => {
+// Folder operations
+ipcMain.handle('folder:getData', () => store.get('dataFolder'));
+ipcMain.handle('folder:select', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Select Data Folder',
+    properties: ['openDirectory', 'createDirectory']
+  });
+  if (!result.canceled && result.filePaths.length > 0) {
+    store.set('dataFolder', result.filePaths[0]);
+    return result.filePaths[0];
+  }
+  return null;
+});
+ipcMain.handle('folder:open', (_, folderPath) => {
   if (folderPath && fs.existsSync(folderPath)) {
     shell.openPath(folderPath);
     return true;
@@ -342,18 +250,14 @@ ipcMain.handle('open-folder', (event, folderPath) => {
   return false;
 });
 
-app.whenReady().then(() => {
-  createWindow();
-  
-  // Check for updates on startup (production only)
-  if (process.env.NODE_ENV !== 'development') {
-    setTimeout(() => {
-      autoUpdater.checkForUpdates().catch(err => {
-        console.log('Auto-update check failed:', err.message);
-      });
-    }, 3000);
-  }
+// Auto backup settings
+ipcMain.handle('autoBackup:get', () => store.get('autoBackup'));
+ipcMain.handle('autoBackup:set', (_, settings) => {
+  store.set('autoBackup', settings);
+  return true;
 });
+
+app.whenReady().then(createWindow);
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
