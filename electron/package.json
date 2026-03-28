@@ -1,16 +1,16 @@
 {
   "name": "staff-manager",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Staff Attendance & Salary Management Desktop Application",
   "main": "main.js",
   "author": "Staff Manager",
   "license": "MIT",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder",
-    "build:win": "electron-builder --win",
-    "build:mac": "electron-builder --mac",
-    "build:linux": "electron-builder --linux",
+    "build": "electron-builder --publish=never",
+    "build:win": "electron-builder --win --publish=never",
+    "build:mac": "electron-builder --mac --publish=never",
+    "build:linux": "electron-builder --linux --publish=never",
     "pack": "electron-builder --dir"
   },
   "build": {
