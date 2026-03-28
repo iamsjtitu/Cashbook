@@ -134,6 +134,9 @@
 - [x] **Individual Ledger PDF Export** (March 2026):
   - PDF button in Party Ledger modal
   - Exports specific party's "len den" statement
+- [x] **Edit Ledger** (March 2026):
+  - Full edit option: Name, Account Head, Parent, Phone, Address, Opening Balance
+  - Warning shown when changing Account Head (affects P&L/Balance Sheet)
 
 ## Account Head System (New)
 Ledgers can now be categorized with Account Heads:

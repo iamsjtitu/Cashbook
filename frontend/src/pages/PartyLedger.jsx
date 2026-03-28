@@ -36,6 +36,11 @@ const PartyLedger = () => {
   const [showLedger, setShowLedger] = useState(false);
   const [showEditOB, setShowEditOB] = useState(false);
   const [editOBData, setEditOBData] = useState({ party: null, opening_balance: "0" });
+  const [showEditLedger, setShowEditLedger] = useState(false);
+  const [editLedgerData, setEditLedgerData] = useState({ 
+    id: "", name: "", phone: "", address: "", opening_balance: "0", 
+    balance_type: "debit", account_head: "", parent_party_id: "" 
+  });
   const [formData, setFormData] = useState({ 
     name: "", 
     phone: "", 
@@ -119,6 +124,40 @@ const PartyLedger = () => {
       fetchParties();
     } catch (error) {
       toast.error("Failed to update");
+    }
+  };
+
+  // Edit full ledger
+  const handleEditLedger = (party) => {
+    setEditLedgerData({
+      id: party.id,
+      name: party.name || "",
+      phone: party.phone || "",
+      address: party.address || "",
+      opening_balance: party.opening_balance?.toString() || "0",
+      balance_type: (party.opening_balance || 0) >= 0 ? "debit" : "credit",
+      account_head: party.account_head || "",
+      parent_party_id: party.parent_party_id || ""
+    });
+    setShowEditLedger(true);
+  };
+
+  const handleUpdateLedger = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.put(`${API}/parties/${editLedgerData.id}`, {
+        name: editLedgerData.name,
+        phone: editLedgerData.phone,
+        address: editLedgerData.address,
+        opening_balance: parseFloat(editLedgerData.opening_balance) || 0,
+        account_head: editLedgerData.account_head || null,
+        parent_party_id: editLedgerData.parent_party_id || null
+      });
+      toast.success("Ledger updated successfully!");
+      setShowEditLedger(false);
+      fetchParties();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Failed to update ledger");
     }
   };
 
@@ -494,8 +533,8 @@ const PartyLedger = () => {
                         <button onClick={() => fetchLedger(party.id)} className="btn btn-secondary text-xs py-1 px-2">
                           {isParent ? 'View All' : 'Ledger'}
                         </button>
-                        <button onClick={() => handleEditOB(party)} className="btn btn-secondary text-xs py-1 px-2">
-                          Edit OB
+                        <button onClick={() => handleEditLedger(party)} className="btn btn-primary text-xs py-1 px-2" data-testid="edit-ledger-btn">
+                          Edit
                         </button>
                         <button onClick={() => handleDelete(party.id)} className="btn btn-outline-danger text-xs py-1 px-2">
                           Delete
@@ -711,6 +750,117 @@ const PartyLedger = () => {
               <div className="modal-footer">
                 <button type="button" onClick={() => setShowEditOB(false)} className="btn btn-secondary">Cancel</button>
                 <button type="submit" className="btn btn-success">Update</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Ledger Full Modal */}
+      {showEditLedger && editLedgerData.id && (
+        <div className="modal-overlay" onClick={() => setShowEditLedger(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="modal-title">Edit Ledger (खाता संपादित करें)</div>
+              <button className="modal-close" onClick={() => setShowEditLedger(false)}>&times;</button>
+            </div>
+            <form onSubmit={handleUpdateLedger}>
+              <div className="modal-body">
+                <div className="form-group">
+                  <label className="form-label">Ledger Name *</label>
+                  <input 
+                    type="text" 
+                    className="form-control" 
+                    value={editLedgerData.name} 
+                    onChange={(e) => setEditLedgerData({...editLedgerData, name: e.target.value})} 
+                    placeholder="Enter name" 
+                    required 
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label className="form-label">Account Head (Category) *</label>
+                  <select 
+                    className="form-control" 
+                    value={editLedgerData.account_head} 
+                    onChange={(e) => setEditLedgerData({...editLedgerData, account_head: e.target.value})}
+                  >
+                    <option value="">-- Select Category --</option>
+                    <optgroup label="Balance Sheet Items">
+                      {ACCOUNT_HEAD_OPTIONS.balance_sheet.map(h => (
+                        <option key={h.value} value={h.value}>{h.label}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="P&L Items">
+                      {ACCOUNT_HEAD_OPTIONS.profit_loss.map(h => (
+                        <option key={h.value} value={h.value}>{h.label}</option>
+                      ))}
+                    </optgroup>
+                  </select>
+                  <div className="text-xs text-orange-500 mt-1">⚠️ Category change karne se P&L/Balance Sheet mein position badal jayegi</div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Parent Ledger (Optional)</label>
+                  <select 
+                    className="form-control" 
+                    value={editLedgerData.parent_party_id} 
+                    onChange={(e) => setEditLedgerData({...editLedgerData, parent_party_id: e.target.value})}
+                  >
+                    <option value="">-- No Parent (Independent) --</option>
+                    {parties.filter(p => p.id !== editLedgerData.id && p.account_head).map(p => (
+                      <option key={p.id} value={p.id}>{p.name} ({getAccountHeadLabel(p.account_head)})</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Phone</label>
+                  <input 
+                    type="text" 
+                    className="form-control" 
+                    value={editLedgerData.phone} 
+                    onChange={(e) => setEditLedgerData({...editLedgerData, phone: e.target.value})} 
+                    placeholder="Enter phone" 
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Address</label>
+                  <input 
+                    type="text" 
+                    className="form-control" 
+                    value={editLedgerData.address} 
+                    onChange={(e) => setEditLedgerData({...editLedgerData, address: e.target.value})} 
+                    placeholder="Enter address" 
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="form-group">
+                    <label className="form-label">Opening Balance</label>
+                    <input 
+                      type="number" 
+                      className="form-control" 
+                      value={editLedgerData.opening_balance} 
+                      onChange={(e) => setEditLedgerData({...editLedgerData, opening_balance: e.target.value})} 
+                      placeholder="0" 
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Balance Type</label>
+                    <select 
+                      className="form-control" 
+                      value={editLedgerData.balance_type} 
+                      onChange={(e) => setEditLedgerData({...editLedgerData, balance_type: e.target.value})}
+                    >
+                      <option value="debit">Debit (Lena)</option>
+                      <option value="credit">Credit (Dena)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" onClick={() => setShowEditLedger(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-success">Save Changes</button>
               </div>
             </form>
           </div>
