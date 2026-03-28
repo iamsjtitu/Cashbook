@@ -10,8 +10,18 @@ const SalaryCalculator = () => {
   const [selectedStaff, setSelectedStaff] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), "yyyy-MM"));
   const [salaryData, setSalaryData] = useState(null);
+  const [advanceData, setAdvanceData] = useState({ total: 0, count: 0 });
   const [loading, setLoading] = useState(true);
   const [calculating, setCalculating] = useState(false);
+  const [showPayModal, setShowPayModal] = useState(false);
+  const [paymentData, setPaymentData] = useState({
+    amount: 0,
+    advance_deducted: 0,
+    payment_mode: "cash",
+    payment_date: format(new Date(), "yyyy-MM-dd"),
+    note: ""
+  });
+  const [paying, setPaying] = useState(false);
 
   const getMonthOptions = () => {
     const months = [];
@@ -40,8 +50,18 @@ const SalaryCalculator = () => {
     if (!selectedStaff) return;
     setCalculating(true);
     try {
-      const response = await axios.get(`${API}/salary/${selectedStaff.id}/${selectedMonth}`);
-      setSalaryData(response.data);
+      const [salaryRes, advanceRes] = await Promise.all([
+        axios.get(`${API}/salary/${selectedStaff.id}/${selectedMonth}`),
+        axios.get(`${API}/advances/summary/${selectedMonth}`)
+      ]);
+      setSalaryData(salaryRes.data);
+      
+      // Get advance for this staff
+      const staffAdvance = advanceRes.data.find(a => a.staff_id === selectedStaff.id);
+      setAdvanceData({
+        total: staffAdvance?.total_advance || 0,
+        count: staffAdvance?.advance_count || 0
+      });
     } catch (error) {
       toast.error("Failed to calculate salary");
     } finally {
@@ -49,7 +69,44 @@ const SalaryCalculator = () => {
     }
   };
 
+  const openPayModal = () => {
+    const netPayable = salaryData.total_earned - advanceData.total;
+    setPaymentData({
+      amount: salaryData.total_earned,
+      advance_deducted: advanceData.total,
+      payment_mode: "cash",
+      payment_date: format(new Date(), "yyyy-MM-dd"),
+      note: ""
+    });
+    setShowPayModal(true);
+  };
+
+  const handlePaySalary = async (e) => {
+    e.preventDefault();
+    setPaying(true);
+    try {
+      await axios.post(`${API}/salary/pay`, {
+        staff_id: selectedStaff.id,
+        month: selectedMonth,
+        amount: paymentData.amount,
+        advance_deducted: paymentData.advance_deducted,
+        payment_date: paymentData.payment_date,
+        payment_mode: paymentData.payment_mode,
+        note: paymentData.note
+      });
+      
+      const netPaid = paymentData.amount - paymentData.advance_deducted;
+      toast.success(`Salary ₹${netPaid.toLocaleString('en-IN')} paid! Cash Book me entry ho gayi.`);
+      setShowPayModal(false);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Payment failed");
+    } finally {
+      setPaying(false);
+    }
+  };
+
   const monthOptions = getMonthOptions();
+  const netPayable = salaryData ? salaryData.total_earned - advanceData.total : 0;
 
   if (loading) return <div className="text-center py-8">Loading...</div>;
 
@@ -98,13 +155,13 @@ const SalaryCalculator = () => {
         
         {salaryData && (
           <>
+            <button onClick={openPayModal} className="action-btn warning" data-testid="pay-salary-btn">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+              Pay Salary
+            </button>
             <button className="action-btn outline-primary" onClick={() => window.print()}>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
               Print
-            </button>
-            <button className="action-btn outline-danger">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
-              PDF
             </button>
           </>
         )}
@@ -137,7 +194,16 @@ const SalaryCalculator = () => {
             <div className="salary-row"><span>Present ({salaryData.total_present} days)</span><span className="font-semibold text-green-600">+ ₹{salaryData.present_amount.toLocaleString('en-IN')}</span></div>
             <div className="salary-row"><span>Half Day ({salaryData.total_half_day} days)</span><span className="font-semibold text-green-600">+ ₹{salaryData.half_day_amount.toLocaleString('en-IN')}</span></div>
             <div className="salary-row"><span>Absent ({salaryData.total_absent} days)</span><span className="font-semibold text-red-600">- ₹{(salaryData.total_absent * salaryData.daily_rate).toLocaleString('en-IN')}</span></div>
-            <div className="salary-row total"><span>NET PAYABLE</span><span className="text-2xl text-orange-500">₹{salaryData.total_earned.toLocaleString('en-IN')}</span></div>
+            
+            <div className="border-t-2 border-dashed border-gray-200 my-3"></div>
+            
+            <div className="salary-row"><span>Total Earned</span><span className="font-bold">₹{salaryData.total_earned.toLocaleString('en-IN')}</span></div>
+            
+            {advanceData.total > 0 && (
+              <div className="salary-row"><span>Advance Deduction ({advanceData.count} times)</span><span className="font-semibold text-red-600">- ₹{advanceData.total.toLocaleString('en-IN')}</span></div>
+            )}
+            
+            <div className="salary-row total"><span>NET PAYABLE</span><span className="text-2xl text-orange-500">₹{netPayable.toLocaleString('en-IN')}</span></div>
           </div>
           <div className="bg-gray-50 p-3 text-center text-xs text-gray-500">Generated on {format(new Date(), "dd-MM-yyyy HH:mm")} | 30-day calculation basis</div>
         </div>
@@ -150,6 +216,68 @@ const SalaryCalculator = () => {
             <div className="bg-orange-50 rounded-lg p-4 max-w-sm mx-auto text-sm text-orange-800">
               <strong>Formula:</strong> Daily = Monthly ÷ 30 | Half Day = Daily ÷ 2
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pay Salary Modal */}
+      {showPayModal && salaryData && (
+        <div className="modal-overlay" onClick={() => setShowPayModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header bg-gradient-to-r from-green-500 to-emerald-500 text-white">
+              <div className="modal-title text-white">Pay Salary - {salaryData.staff_name}</div>
+              <button className="modal-close text-white" onClick={() => setShowPayModal(false)}>&times;</button>
+            </div>
+            <form onSubmit={handlePaySalary}>
+              <div className="modal-body">
+                <div className="bg-green-50 p-4 rounded-lg mb-4">
+                  <div className="grid grid-cols-2 gap-4 text-center">
+                    <div>
+                      <div className="text-xs text-gray-500">Total Earned</div>
+                      <div className="text-lg font-bold">₹{salaryData.total_earned.toLocaleString('en-IN')}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500">Advance Deduction</div>
+                      <div className="text-lg font-bold text-red-600">- ₹{advanceData.total.toLocaleString('en-IN')}</div>
+                    </div>
+                  </div>
+                  <div className="border-t mt-3 pt-3 text-center">
+                    <div className="text-xs text-gray-500">Net Payable</div>
+                    <div className="text-2xl font-bold text-green-600">₹{netPayable.toLocaleString('en-IN')}</div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="form-group">
+                    <label className="form-label">Payment Date</label>
+                    <input type="date" className="form-control" value={paymentData.payment_date} onChange={(e) => setPaymentData({...paymentData, payment_date: e.target.value})} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Payment Mode</label>
+                    <select className="form-control" value={paymentData.payment_mode} onChange={(e) => setPaymentData({...paymentData, payment_mode: e.target.value})}>
+                      <option value="cash">Cash</option>
+                      <option value="upi">UPI</option>
+                      <option value="bank_transfer">Bank Transfer</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Note (Optional)</label>
+                  <input type="text" className="form-control" value={paymentData.note} onChange={(e) => setPaymentData({...paymentData, note: e.target.value})} placeholder="Any remarks" />
+                </div>
+
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700">
+                  Ye amount Cash Book me automatically Debit ho jayega with category "Salary".
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" onClick={() => setShowPayModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" disabled={paying} className="btn btn-success">
+                  {paying ? "Processing..." : `Pay ₹${netPayable.toLocaleString('en-IN')}`}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

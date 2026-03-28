@@ -39,7 +39,7 @@ const Advance = () => {
     e.preventDefault();
     try {
       await axios.post(`${API}/advances`, { ...formData, amount: parseFloat(formData.amount) });
-      toast.success("Advance added successfully!");
+      toast.success("Advance added! Cash Book me bhi entry ho gayi.");
       setShowModal(false);
       setFormData({ staff_id: staffList[0]?.id || "", amount: "", date: format(new Date(), "yyyy-MM-dd"), note: "" });
       fetchData();

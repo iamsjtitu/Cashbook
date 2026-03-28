@@ -525,6 +525,13 @@ async def delete_attendance(staff_id: str, date: str):
         raise HTTPException(status_code=404, detail="Attendance record not found")
     return {"message": "Attendance deleted successfully"}
 
+# Salary Payments API - MUST be before /salary/{staff_id}/{month} to avoid route conflict
+@api_router.get("/salary/payments/{month}")
+async def get_salary_payments(month: str):
+    """Get all salary payments for a month"""
+    payments = await db.salary_payments.find({"month": month}, {"_id": 0}).to_list(1000)
+    return payments
+
 # Salary Calculation API
 @api_router.get("/salary/{staff_id}/{month}", response_model=SalaryCalculation)
 async def calculate_salary(staff_id: str, month: str):
@@ -603,7 +610,7 @@ async def update_app_version(version: AppVersion):
     await db.app_version.insert_one(version.model_dump())
     return version
 
-# Advance APIs
+# Advance APIs - Auto-link to Cash Book
 @api_router.post("/advances", response_model=Advance)
 async def create_advance(advance: AdvanceCreate):
     # Verify staff exists
@@ -614,6 +621,20 @@ async def create_advance(advance: AdvanceCreate):
     advance_obj = Advance(**advance.model_dump())
     doc = advance_obj.model_dump()
     await db.advances.insert_one(doc)
+    
+    # Auto-create Cash Book entry (Debit - advance given to staff)
+    txn = Transaction(
+        date=advance.date,
+        transaction_type=TransactionType.DEBIT,
+        amount=advance.amount,
+        payment_mode=PaymentMode.CASH,
+        description=f"Advance: {staff['name']} - {advance.note or 'Advance Payment'}",
+        category=ExpenseCategory.SALARY,
+        reference_id=advance_obj.id,
+        reference_type="advance"
+    )
+    await db.transactions.insert_one(txn.model_dump())
+    
     return advance_obj
 
 @api_router.get("/advances", response_model=List[Advance])
@@ -663,6 +684,64 @@ async def get_advance_summary(month: str):
         ))
     
     return summaries
+
+# Salary Payment API - Auto-link to Cash Book
+class SalaryPaymentRequest(BaseModel):
+    staff_id: str
+    month: str  # YYYY-MM
+    amount: float
+    payment_date: str  # YYYY-MM-DD
+    payment_mode: PaymentMode = PaymentMode.CASH
+    advance_deducted: float = 0.0
+    note: Optional[str] = None
+
+@api_router.post("/salary/pay")
+async def pay_salary(payment: SalaryPaymentRequest):
+    """Pay salary to staff and auto-create Cash Book entry"""
+    staff = await db.staff.find_one({"id": payment.staff_id}, {"_id": 0})
+    if not staff:
+        raise HTTPException(status_code=404, detail="Staff not found")
+    
+    # Create salary payment record
+    salary_record = {
+        "id": str(uuid.uuid4()),
+        "staff_id": payment.staff_id,
+        "staff_name": staff["name"],
+        "month": payment.month,
+        "amount": payment.amount,
+        "advance_deducted": payment.advance_deducted,
+        "net_paid": payment.amount - payment.advance_deducted,
+        "payment_date": payment.payment_date,
+        "payment_mode": payment.payment_mode,
+        "note": payment.note,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.salary_payments.insert_one(salary_record)
+    
+    # Auto-create Cash Book entry (Debit - salary paid)
+    net_amount = payment.amount - payment.advance_deducted
+    if net_amount > 0:
+        txn = Transaction(
+            date=payment.payment_date,
+            transaction_type=TransactionType.DEBIT,
+            amount=net_amount,
+            payment_mode=payment.payment_mode,
+            description=f"Salary: {staff['name']} - {payment.month}" + (f" (Advance ₹{payment.advance_deducted} deducted)" if payment.advance_deducted > 0 else ""),
+            category=ExpenseCategory.SALARY,
+            reference_id=salary_record["id"],
+            reference_type="salary_payment"
+        )
+        await db.transactions.insert_one(txn.model_dump())
+    
+    return {
+        "message": "Salary paid successfully",
+        "staff_name": staff["name"],
+        "month": payment.month,
+        "gross_amount": payment.amount,
+        "advance_deducted": payment.advance_deducted,
+        "net_paid": net_amount,
+        "transaction_created": net_amount > 0
+    }
 
 # Root API
 @api_router.get("/")
@@ -845,7 +924,7 @@ async def add_interest_to_cashbook(account_id: str, end_date: Optional[str] = No
     
     # Calculate interest (30-day monthly basis)
     start = datetime.strptime(account["start_date"], "%Y-%m-%d")
-    end = datetime.strptime(end_date, "%Y-%m-%d") if end_date else datetime.now(timezone.utc)
+    end = datetime.strptime(end_date, "%Y-%m-%d") if end_date else datetime.now()
     days = max(0, (end - start).days)
     
     principal = account["principal_amount"]
@@ -1320,9 +1399,9 @@ async def get_simple_balance_sheet(as_on_date: Optional[str] = None, fy: Optiona
         }
     }
 
-# Auto-link: Pay Salary API
-@api_router.post("/pay-salary/{staff_id}/{month}")
-async def pay_salary(staff_id: str, month: str, payment_mode: PaymentMode = PaymentMode.CASH):
+# Old Pay Salary API (deprecated - use /salary/pay instead)
+@api_router.post("/pay-salary-old/{staff_id}/{month}")
+async def pay_salary_old(staff_id: str, month: str, payment_mode: PaymentMode = PaymentMode.CASH):
     """Pay salary and auto-add to cash book"""
     # Calculate salary
     salary_data = await calculate_salary(staff_id, month)
