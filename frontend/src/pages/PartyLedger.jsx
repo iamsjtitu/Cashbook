@@ -224,6 +224,77 @@ const PartyLedger = () => {
     return parties.some(p => p.parent_party_id === partyId);
   };
 
+  // Export individual ledger to PDF
+  const exportLedgerPDF = (ledger) => {
+    const doc = new jsPDF();
+    
+    // Header
+    doc.setFontSize(18);
+    doc.setTextColor(255, 107, 53);
+    doc.text('STAFF MANAGER', 105, 15, { align: 'center' });
+    
+    doc.setFontSize(14);
+    doc.setTextColor(50);
+    doc.text(`Ledger Statement - ${ledger.party?.name || 'Party'}`, 105, 24, { align: 'center' });
+    
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Generated: ${format(new Date(), 'dd-MM-yyyy HH:mm')}`, 105, 31, { align: 'center' });
+    
+    // Summary Box
+    doc.setFillColor(245, 245, 245);
+    doc.rect(14, 36, 182, 18, 'F');
+    doc.setFontSize(10);
+    doc.setTextColor(50);
+    doc.text(`Opening Balance: Rs. ${(ledger.opening_balance || 0).toLocaleString('en-IN')}`, 20, 44);
+    doc.text(`Current Balance: Rs. ${Math.abs(ledger.current_balance || 0).toLocaleString('en-IN')} ${(ledger.current_balance || 0) >= 0 ? '(DR)' : '(CR)'}`, 100, 44);
+    doc.text(`Total Entries: ${ledger.entries?.length || 0}`, 20, 50);
+    
+    // Sub-ledgers info if any
+    if (ledger.sub_ledgers && ledger.sub_ledgers.length > 0) {
+      doc.text(`Includes: ${ledger.sub_ledgers.map(s => s.name).join(', ')}`, 100, 50);
+    }
+    
+    // Table data
+    const tableData = (ledger.entries || []).map(entry => [
+      format(new Date(entry.date), 'dd-MM-yyyy'),
+      entry.description || '-',
+      entry.payment_mode?.toUpperCase() || '-',
+      entry.debit > 0 ? `Rs. ${entry.debit.toLocaleString('en-IN')}` : '-',
+      entry.credit > 0 ? `Rs. ${entry.credit.toLocaleString('en-IN')}` : '-',
+      `Rs. ${Math.abs(entry.balance || 0).toLocaleString('en-IN')}`
+    ]);
+    
+    doc.autoTable({
+      startY: 58,
+      head: [['Date', 'Description', 'Mode', 'Debit', 'Credit', 'Balance']],
+      body: tableData,
+      theme: 'striped',
+      headStyles: { fillColor: [255, 107, 53] },
+      styles: { fontSize: 9 },
+      columnStyles: {
+        0: { cellWidth: 25 },
+        1: { cellWidth: 55 },
+        2: { cellWidth: 20 },
+        3: { cellWidth: 28, halign: 'right' },
+        4: { cellWidth: 28, halign: 'right' },
+        5: { cellWidth: 28, halign: 'right' }
+      }
+    });
+    
+    // Footer
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(150);
+      doc.text(`Page ${i} of ${pageCount}`, 105, doc.internal.pageSize.height - 10, { align: 'center' });
+    }
+    
+    doc.save(`Ledger_${ledger.party?.name || 'Party'}_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+    toast.success("Ledger PDF Downloaded!");
+  };
+
   if (loading) return <div className="text-center py-8">Loading...</div>;
 
   return (
@@ -532,7 +603,19 @@ const PartyLedger = () => {
           <div className="modal-content modal-lg" onClick={(e) => e.stopPropagation()} style={{maxWidth: '900px'}}>
             <div className="modal-header">
               <div className="modal-title">Ledger - {ledgerData.party?.name}</div>
-              <button className="modal-close" onClick={() => setShowLedger(false)}>&times;</button>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => exportLedgerPDF(ledgerData)} 
+                  className="btn btn-outline-danger text-xs py-1 px-3"
+                  data-testid="export-ledger-pdf"
+                >
+                  <svg className="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  PDF
+                </button>
+                <button className="modal-close" onClick={() => setShowLedger(false)}>&times;</button>
+              </div>
             </div>
             <div className="modal-body p-0">
               {/* Sub-ledgers info */}
