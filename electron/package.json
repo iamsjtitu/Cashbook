@@ -1,6 +1,6 @@
 {
   "name": "staff-manager",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Staff Attendance & Salary Management Desktop Application",
   "main": "main.js",
   "author": "Staff Manager",
