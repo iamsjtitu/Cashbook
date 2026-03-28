@@ -22,10 +22,8 @@ let db;
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 550,
-    height: 650,
+    height: 680,
     resizable: false,
-    frame: false,
-    transparent: true,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -33,7 +31,7 @@ function createWindow() {
     },
     icon: path.join(__dirname, 'build', 'icon.png'),
     title: 'Staff Manager - Data Selection',
-    backgroundColor: '#00000000',
+    backgroundColor: '#1a1a2e',
     show: false
   });
 
