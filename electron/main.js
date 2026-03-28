@@ -1,6 +1,7 @@
 const { app, BrowserWindow, Menu, dialog, shell, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { autoUpdater } = require('electron-updater');
 const Store = require('electron-store');
 
 // Initialize electron-store for persistent settings
@@ -10,11 +11,15 @@ const store = new Store({
     dataFolder: '',
     autoBackup: {
       enabled: false,
-      frequency: 'daily', // daily, weekly
+      frequency: 'daily',
       lastBackup: null
     }
   }
 });
+
+// Configure auto-updater
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = true;
 
 let mainWindow;
 
@@ -40,20 +45,16 @@ function createWindow() {
     mainWindow.loadURL('http://localhost:3000');
     mainWindow.webContents.openDevTools();
   } else {
-    // Load from built React app
     mainWindow.loadFile(path.join(__dirname, 'build', 'index.html'));
   }
 
-  // Show window when ready
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
     
-    // Check if data folder is set, if not prompt user
     const dataFolder = store.get('dataFolder');
     if (!dataFolder) {
       promptFolderSelection();
     } else {
-      // Check auto-backup on startup
       checkAutoBackup();
     }
   });
@@ -107,6 +108,11 @@ function createWindow() {
       label: 'Help',
       submenu: [
         {
+          label: 'Check for Updates',
+          click: () => checkForUpdates()
+        },
+        { type: 'separator' },
+        {
           label: 'About Staff Manager',
           click: () => {
             dialog.showMessageBox(mainWindow, {
@@ -136,7 +142,6 @@ function promptFolderSelection() {
       const selectedPath = result.filePaths[0];
       store.set('dataFolder', selectedPath);
       
-      // Create backups subfolder
       const backupsPath = path.join(selectedPath, 'StaffManager_Backups');
       if (!fs.existsSync(backupsPath)) {
         fs.mkdirSync(backupsPath, { recursive: true });
@@ -149,7 +154,6 @@ function promptFolderSelection() {
         detail: `Path: ${selectedPath}\n\nBackups will be saved in: StaffManager_Backups subfolder`
       });
       
-      // Notify renderer
       mainWindow.webContents.send('folder-selected', selectedPath);
     }
   });
@@ -168,23 +172,80 @@ function checkAutoBackup() {
   if (!lastBackup) {
     shouldBackup = true;
   } else if (autoBackup.frequency === 'daily') {
-    // More than 24 hours since last backup
     shouldBackup = (now - lastBackup) > 24 * 60 * 60 * 1000;
   } else if (autoBackup.frequency === 'weekly') {
-    // More than 7 days since last backup
     shouldBackup = (now - lastBackup) > 7 * 24 * 60 * 60 * 1000;
   }
   
   if (shouldBackup) {
-    // Notify renderer to perform backup
     mainWindow.webContents.send('perform-auto-backup');
   }
 }
 
-// IPC Handlers for communication with renderer
-ipcMain.handle('get-data-folder', () => {
-  return store.get('dataFolder');
+// Auto-updater events
+autoUpdater.on('checking-for-update', () => {
+  console.log('Checking for updates...');
 });
+
+autoUpdater.on('update-available', (info) => {
+  dialog.showMessageBox(mainWindow, {
+    type: 'info',
+    title: 'Update Available',
+    message: `New version ${info.version} available!`,
+    detail: 'Download and install now?',
+    buttons: ['Download', 'Later']
+  }).then((result) => {
+    if (result.response === 0) {
+      autoUpdater.downloadUpdate();
+    }
+  });
+});
+
+autoUpdater.on('update-not-available', () => {
+  dialog.showMessageBox(mainWindow, {
+    type: 'info',
+    title: 'No Updates',
+    message: 'You are using the latest version!',
+    detail: 'Current version: ' + app.getVersion()
+  });
+});
+
+autoUpdater.on('download-progress', (progress) => {
+  mainWindow.setProgressBar(progress.percent / 100);
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+  mainWindow.setProgressBar(-1);
+  dialog.showMessageBox(mainWindow, {
+    type: 'info',
+    title: 'Update Ready',
+    message: 'Update downloaded!',
+    detail: 'App will restart to install.',
+    buttons: ['Restart Now', 'Later']
+  }).then((result) => {
+    if (result.response === 0) {
+      autoUpdater.quitAndInstall();
+    }
+  });
+});
+
+autoUpdater.on('error', (err) => {
+  console.error('Update error:', err);
+});
+
+function checkForUpdates() {
+  autoUpdater.checkForUpdates().catch(err => {
+    dialog.showMessageBox(mainWindow, {
+      type: 'error',
+      title: 'Update Error',
+      message: 'Could not check for updates',
+      detail: err.message
+    });
+  });
+}
+
+// IPC Handlers
+ipcMain.handle('get-data-folder', () => store.get('dataFolder'));
 
 ipcMain.handle('select-data-folder', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
@@ -197,20 +258,16 @@ ipcMain.handle('select-data-folder', async () => {
     const selectedPath = result.filePaths[0];
     store.set('dataFolder', selectedPath);
     
-    // Create backups subfolder
     const backupsPath = path.join(selectedPath, 'StaffManager_Backups');
     if (!fs.existsSync(backupsPath)) {
       fs.mkdirSync(backupsPath, { recursive: true });
     }
-    
     return selectedPath;
   }
   return null;
 });
 
-ipcMain.handle('get-auto-backup-settings', () => {
-  return store.get('autoBackup');
-});
+ipcMain.handle('get-auto-backup-settings', () => store.get('autoBackup'));
 
 ipcMain.handle('set-auto-backup-settings', (event, settings) => {
   store.set('autoBackup', settings);
@@ -219,9 +276,7 @@ ipcMain.handle('set-auto-backup-settings', (event, settings) => {
 
 ipcMain.handle('save-backup-to-folder', async (event, backupData) => {
   const dataFolder = store.get('dataFolder');
-  if (!dataFolder) {
-    return { success: false, error: 'No data folder set' };
-  }
+  if (!dataFolder) return { success: false, error: 'No data folder set' };
   
   const backupsPath = path.join(dataFolder, 'StaffManager_Backups');
   if (!fs.existsSync(backupsPath)) {
@@ -235,7 +290,6 @@ ipcMain.handle('save-backup-to-folder', async (event, backupData) => {
   try {
     fs.writeFileSync(filepath, JSON.stringify(backupData, null, 2), 'utf8');
     
-    // Update last backup time
     const autoBackup = store.get('autoBackup');
     autoBackup.lastBackup = new Date().toISOString();
     store.set('autoBackup', autoBackup);
@@ -254,7 +308,7 @@ ipcMain.handle('get-backup-files', async () => {
   if (!fs.existsSync(backupsPath)) return [];
   
   try {
-    const files = fs.readdirSync(backupsPath)
+    return fs.readdirSync(backupsPath)
       .filter(f => f.endsWith('.json'))
       .map(f => {
         const stats = fs.statSync(path.join(backupsPath, f));
@@ -266,8 +320,6 @@ ipcMain.handle('get-backup-files', async () => {
         };
       })
       .sort((a, b) => new Date(b.created) - new Date(a.created));
-    
-    return files;
   } catch (err) {
     return [];
   }
@@ -292,16 +344,21 @@ ipcMain.handle('open-folder', (event, folderPath) => {
 
 app.whenReady().then(() => {
   createWindow();
+  
+  // Check for updates on startup (production only)
+  if (process.env.NODE_ENV !== 'development') {
+    setTimeout(() => {
+      autoUpdater.checkForUpdates().catch(err => {
+        console.log('Auto-update check failed:', err.message);
+      });
+    }, 3000);
+  }
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+  if (process.platform !== 'darwin') app.quit();
 });
 
 app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
-  }
+  if (BrowserWindow.getAllWindows().length === 0) createWindow();
 });
