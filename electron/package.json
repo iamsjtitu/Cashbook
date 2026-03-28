@@ -56,7 +56,8 @@
     }
   },
   "dependencies": {
-    "electron-updater": "^6.1.7"
+    "electron-updater": "^6.1.7",
+    "electron-store": "^8.1.0"
   },
   "devDependencies": {
     "electron": "^28.1.0",

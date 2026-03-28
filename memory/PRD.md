@@ -137,6 +137,11 @@
 - [x] **Edit Ledger** (March 2026):
   - Full edit option: Name, Account Head, Parent, Phone, Address, Opening Balance
   - Warning shown when changing Account Head (affects P&L/Balance Sheet)
+- [x] **Electron Folder Selection & Auto Backup** (March 2026):
+  - First launch: Data folder select karo
+  - Backup files usi folder mein save honge (StaffManager_Backups subfolder)
+  - Auto Backup: Daily/Weekly automatic backup option
+  - Saved Backups list: See and restore from any previous backup
 
 ## Account Head System (New)
 Ledgers can now be categorized with Account Heads:
