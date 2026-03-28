@@ -69,7 +69,7 @@
 - `POST /api/chit-funds/{id}/lift` - Lift (auto Cash Book credit)
 
 ## Testing Status
-- Backend: 100% (10/10 accounting hierarchy tests + previous tests - iteration 14)
+- Backend: 100% (9/9 hierarchical ledger tests - iteration 15)
 - Frontend: 100% (All features verified)
 
 ## Implementation Complete (December 2025)
@@ -100,6 +100,12 @@
 - [x] **Sub-Ledger Hierarchy** - Parent Ledger option for creating sub-ledgers
 - [x] **Custom Expense Categories** - Create/delete custom expense categories
 - [x] **Expenses Page in Navigation** - Now visible in main menu
+- [x] **Parent Ledger Aggregation** - Parent shows all sub-ledger transactions
+- [x] **Leaf Parties API** - Cash Book dropdown only shows leaf ledgers (no parents)
+- [x] **Auto-create Parent Ledgers:**
+  - Staff → "Staff Advances" (Current Asset)
+  - Chit Fund → "Chit Fund Investment" (Current Asset)
+  - Interest/Byaj → "Byaj (Interest) Receivable" (Current Asset)
 
 ## Account Head System (New)
 Ledgers can now be categorized with Account Heads:
