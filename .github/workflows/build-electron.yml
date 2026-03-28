@@ -41,7 +41,9 @@ jobs:
         run: yarn build
 
       - name: Copy React Build to Electron
+        shell: bash
         run: |
+          rm -rf electron/build
           mkdir -p electron/build
           cp -r frontend/build/* electron/build/
 
