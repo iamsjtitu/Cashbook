@@ -415,7 +415,7 @@ class ChitMonthlyEntryBase(BaseModel):
     month_number: int  # Which month (1, 2, 3...)
     payment_date: str  # YYYY-MM-DD
     paid_amount: float  # EMI paid this month
-    auction_amount: float  # Winning bid amount this month (e.g., 7,00,000)
+    dividend_received: float  # Is mahine kitna mila (dividend)
     payment_mode: PaymentMode
     note: Optional[str] = None
 
@@ -425,8 +425,8 @@ class ChitMonthlyEntryCreate(ChitMonthlyEntryBase):
 class ChitMonthlyEntry(ChitMonthlyEntryBase):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    # Auto-calculated fields
-    dividend: float = 0.0  # (chit_value - auction_amount) / total_members
+    # Calculated field
+    effective_cost: float = 0.0  # paid_amount - dividend_received
     transaction_id: Optional[str] = None  # Link to cash book (for EMI payment)
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -1492,10 +1492,10 @@ async def delete_chit_fund(chit_id: str):
         raise HTTPException(status_code=404, detail="Chit fund not found")
     return {"message": "Chit fund deleted"}
 
-# Add Monthly Entry (EMI + Auction Amount = Auto-calculate Dividend)
+# Add Monthly Entry (EMI + Dividend Received)
 @api_router.post("/chit-funds/{chit_id}/monthly-entry")
 async def add_chit_monthly_entry(chit_id: str, entry: ChitMonthlyEntryCreate):
-    """Add monthly entry - EMI payment + this month's auction amount = auto-calculate dividend"""
+    """Add monthly entry - EMI paid + Dividend received this month"""
     chit = await db.chit_funds.find_one({"id": chit_id}, {"_id": 0})
     if not chit:
         raise HTTPException(status_code=404, detail="Chit fund not found")
@@ -1506,17 +1506,14 @@ async def add_chit_monthly_entry(chit_id: str, entry: ChitMonthlyEntryCreate):
         "month_number": entry.month_number
     })
     if existing:
-        raise HTTPException(status_code=400, detail=f"Entry for month {entry.month_number} already exists")
+        raise HTTPException(status_code=400, detail=f"Month {entry.month_number} ki entry already hai")
     
-    # Calculate dividend
-    # Dividend = (Chit Value - Auction Amount) / Total Members
-    chit_value = chit.get("chit_value", 0)
-    total_members = chit.get("total_members", 1)
-    dividend = (chit_value - entry.auction_amount) / total_members
+    # Calculate effective cost
+    effective_cost = entry.paid_amount - entry.dividend_received
     
     # Create entry
     entry_obj = ChitMonthlyEntry(**entry.model_dump())
-    entry_obj.dividend = round(dividend, 2)
+    entry_obj.effective_cost = round(effective_cost, 2)
     
     # Auto-create transaction in cash book (Debit - EMI going out)
     txn = Transaction(
@@ -1524,7 +1521,7 @@ async def add_chit_monthly_entry(chit_id: str, entry: ChitMonthlyEntryCreate):
         transaction_type=TransactionType.DEBIT,
         amount=entry.paid_amount,
         payment_mode=entry.payment_mode,
-        description=f"Chit: {chit['name']} - Month {entry.month_number} EMI | Auction: ₹{entry.auction_amount:,.0f} | Dividend: ₹{dividend:,.0f}",
+        description=f"Chit: {chit['name']} - Month {entry.month_number} | EMI: ₹{entry.paid_amount:,.0f} | Mila: ₹{entry.dividend_received:,.0f}",
         category=ExpenseCategory.CHIT_FUND,
         reference_id=chit_id,
         reference_type="chit_monthly"
@@ -1541,19 +1538,18 @@ async def add_chit_monthly_entry(chit_id: str, entry: ChitMonthlyEntryCreate):
         {
             "$inc": {
                 "total_paid": entry.paid_amount,
-                "total_dividend": dividend,
+                "total_dividend": entry.dividend_received,
                 "payments_count": 1
             }
         }
     )
     
     return {
-        "message": "Monthly entry added",
+        "message": "Entry add ho gayi",
         "month": entry.month_number,
         "paid": entry.paid_amount,
-        "auction_amount": entry.auction_amount,
-        "dividend": dividend,
-        "effective_cost": entry.paid_amount - dividend,
+        "dividend_received": entry.dividend_received,
+        "effective_cost": effective_cost,
         "transaction_id": txn.id
     }
 
@@ -1564,6 +1560,27 @@ async def get_chit_monthly_entries(chit_id: str):
         {"chit_id": chit_id}, {"_id": 0}
     ).sort("month_number", 1).to_list(1000)
     return entries
+
+# Get paid months list (for dropdown)
+@api_router.get("/chit-funds/{chit_id}/paid-months")
+async def get_chit_paid_months(chit_id: str):
+    """Get list of which months are already paid"""
+    chit = await db.chit_funds.find_one({"id": chit_id}, {"_id": 0})
+    if not chit:
+        raise HTTPException(status_code=404, detail="Chit fund not found")
+    
+    entries = await db.chit_monthly_entries.find(
+        {"chit_id": chit_id}, {"month_number": 1, "_id": 0}
+    ).to_list(1000)
+    
+    paid_months = [e["month_number"] for e in entries]
+    duration = chit.get("duration_months", 20)
+    
+    return {
+        "duration_months": duration,
+        "paid_months": paid_months,
+        "pending_months": [m for m in range(1, duration + 1) if m not in paid_months]
+    }
 
 # Mark Chit as Lifted (Uthaya)
 @api_router.post("/chit-funds/{chit_id}/lift")
@@ -1622,20 +1639,23 @@ async def delete_chit_monthly_entry(entry_id: str):
     if entry.get("transaction_id"):
         await db.transactions.delete_one({"id": entry["transaction_id"]})
     
+    # Get dividend from entry (handle both old and new field names)
+    dividend = entry.get("dividend_received", entry.get("dividend", 0))
+    
     # Update chit fund totals
     await db.chit_funds.update_one(
         {"id": entry["chit_id"]},
         {
             "$inc": {
                 "total_paid": -entry["paid_amount"],
-                "total_dividend": -entry["dividend"],
+                "total_dividend": -dividend,
                 "payments_count": -1
             }
         }
     )
     
     await db.chit_monthly_entries.delete_one({"id": entry_id})
-    return {"message": "Entry deleted"}
+    return {"message": "Entry delete ho gayi"}
 
 # Get Chit Fund Complete Summary (Final Profit Calculation)
 @api_router.get("/chit-funds/{chit_id}/summary")

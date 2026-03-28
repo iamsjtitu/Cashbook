@@ -14,6 +14,7 @@ const ChitFund = () => {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedChit, setSelectedChit] = useState(null);
   const [chitDetail, setChitDetail] = useState(null);
+  const [paidMonths, setPaidMonths] = useState({ paid_months: [], pending_months: [] });
   
   const [formData, setFormData] = useState({
     name: "",
@@ -27,9 +28,9 @@ const ChitFund = () => {
   });
   
   const [entryData, setEntryData] = useState({
-    month_number: 1,
+    month_number: "",
     paid_amount: "",
-    auction_amount: "",
+    dividend_received: "",
     payment_date: format(new Date(), "yyyy-MM-dd"),
     payment_mode: "cash",
     note: ""
@@ -82,16 +83,20 @@ const ChitFund = () => {
     try {
       const res = await axios.post(`${API}/chit-funds/${selectedChit.id}/monthly-entry`, {
         chit_id: selectedChit.id,
-        ...entryData,
+        month_number: parseInt(entryData.month_number),
         paid_amount: parseFloat(entryData.paid_amount),
-        auction_amount: parseFloat(entryData.auction_amount)
+        dividend_received: parseFloat(entryData.dividend_received),
+        payment_date: entryData.payment_date,
+        payment_mode: entryData.payment_mode,
+        note: entryData.note
       });
-      toast.success(`Month ${entryData.month_number} entry added! Dividend: ₹${res.data.dividend?.toLocaleString('en-IN')}`);
+      const profit = parseFloat(entryData.dividend_received);
+      toast.success(`Month ${entryData.month_number} entry add ho gayi! Profit: ₹${profit.toLocaleString('en-IN')}`);
       setShowEntryModal(false);
       fetchData();
       if (showDetailModal) fetchChitDetail(selectedChit);
     } catch (error) {
-      toast.error(error.response?.data?.detail || "Failed to add entry");
+      toast.error(error.response?.data?.detail || "Entry add nahi hui");
     }
   };
 
@@ -142,16 +147,33 @@ const ChitFund = () => {
     }
   };
 
-  const openEntryModal = (chit) => {
+  const openEntryModal = async (chit) => {
     setSelectedChit(chit);
-    setEntryData({
-      month_number: (chit.payments_count || 0) + 1,
-      paid_amount: chit.monthly_installment?.toString() || "",
-      auction_amount: "",
-      payment_date: format(new Date(), "yyyy-MM-dd"),
-      payment_mode: "cash",
-      note: ""
-    });
+    // Fetch paid months for dropdown
+    try {
+      const res = await axios.get(`${API}/chit-funds/${chit.id}/paid-months`);
+      setPaidMonths(res.data);
+      // Auto-select first pending month
+      const firstPending = res.data.pending_months?.[0] || 1;
+      setEntryData({
+        month_number: firstPending.toString(),
+        paid_amount: chit.monthly_installment?.toString() || "",
+        dividend_received: "",
+        payment_date: format(new Date(), "yyyy-MM-dd"),
+        payment_mode: "cash",
+        note: ""
+      });
+    } catch (err) {
+      console.error(err);
+      setEntryData({
+        month_number: "",
+        paid_amount: chit.monthly_installment?.toString() || "",
+        dividend_received: "",
+        payment_date: format(new Date(), "yyyy-MM-dd"),
+        payment_mode: "cash",
+        note: ""
+      });
+    }
     setShowEntryModal(true);
   };
 
@@ -165,12 +187,11 @@ const ChitFund = () => {
     setShowLiftModal(true);
   };
 
-  // Calculate expected dividend based on auction amount
-  const calculateExpectedDividend = () => {
-    if (!selectedChit || !entryData.auction_amount) return 0;
-    const chitValue = selectedChit.chit_value || 0;
-    const members = selectedChit.total_members || 1;
-    return Math.round((chitValue - parseFloat(entryData.auction_amount)) / members);
+  // Calculate effective cost
+  const calculateEffectiveCost = () => {
+    const paid = parseFloat(entryData.paid_amount) || 0;
+    const dividend = parseFloat(entryData.dividend_received) || 0;
+    return paid - dividend;
   };
 
   if (loading) return <div className="text-center py-8">Loading...</div>;
@@ -369,39 +390,66 @@ const ChitFund = () => {
               <div className="modal-body">
                 <div className="bg-purple-50 p-3 rounded-lg mb-4">
                   <div className="text-sm text-purple-700">
-                    <strong>Chit Value:</strong> ₹{selectedChit.chit_value?.toLocaleString('en-IN')} | 
-                    <strong> Monthly EMI:</strong> ₹{selectedChit.monthly_installment?.toLocaleString('en-IN')} | 
-                    <strong> Members:</strong> {selectedChit.total_members}
+                    <strong>Monthly EMI:</strong> ₹{selectedChit.monthly_installment?.toLocaleString('en-IN')} | 
+                    <strong> Duration:</strong> {selectedChit.duration_months} months
                   </div>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="form-group">
-                    <label className="form-label">Month Number * <span className="text-gray-400 text-xs">(महीना नंबर)</span></label>
-                    <input type="number" className="form-control" value={entryData.month_number} onChange={(e) => setEntryData({...entryData, month_number: parseInt(e.target.value)})} min="1" max={selectedChit.duration_months} required />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">EMI Paid (₹) * <span className="text-gray-400 text-xs">(भुगतान)</span></label>
-                    <input type="number" className="form-control" value={entryData.paid_amount} onChange={(e) => setEntryData({...entryData, paid_amount: e.target.value})} required />
-                  </div>
-                </div>
-                
+                {/* Month Dropdown */}
                 <div className="form-group">
-                  <label className="form-label">Auction Amount (₹) * <span className="text-gray-400 text-xs">(इस महीने नीलामी में कितने में गया?)</span></label>
-                  <input type="number" className="form-control text-lg font-bold" value={entryData.auction_amount} onChange={(e) => setEntryData({...entryData, auction_amount: e.target.value})} placeholder="e.g., 750000" required />
+                  <label className="form-label">Month Select Karo * <span className="text-gray-400 text-xs">(महीना चुनो)</span></label>
+                  <select 
+                    className="form-control text-lg font-bold" 
+                    value={entryData.month_number} 
+                    onChange={(e) => setEntryData({...entryData, month_number: e.target.value})}
+                    required
+                  >
+                    <option value="">-- Month Select Karo --</option>
+                    {Array.from({ length: selectedChit.duration_months }, (_, i) => i + 1).map(month => {
+                      const isPaid = paidMonths.paid_months?.includes(month);
+                      return (
+                        <option key={month} value={month} disabled={isPaid}>
+                          Month {month} {isPaid ? '✓ (Paid)' : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
                 </div>
 
-                {/* Live Dividend Calculation */}
-                {entryData.auction_amount && (
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 mt-4">
-                    <div className="flex justify-between items-center">
-                      <span className="text-green-700 font-medium">This Month's Dividend (लाभांश):</span>
-                      <span className="text-2xl font-bold text-green-600">
-                        ₹{calculateExpectedDividend().toLocaleString('en-IN')}
-                      </span>
-                    </div>
-                    <div className="text-xs text-green-600 mt-1">
-                      Formula: (Chit Value - Auction Amount) ÷ Members = ({selectedChit.chit_value?.toLocaleString('en-IN')} - {parseFloat(entryData.auction_amount).toLocaleString('en-IN')}) ÷ {selectedChit.total_members}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="form-group">
+                    <label className="form-label">EMI Paid (₹) * <span className="text-gray-400 text-xs">(कितना दिया)</span></label>
+                    <input type="number" className="form-control text-lg" value={entryData.paid_amount} onChange={(e) => setEntryData({...entryData, paid_amount: e.target.value})} required />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Is Mahine Mila (₹) * <span className="text-gray-400 text-xs">(Profit/Dividend)</span></label>
+                    <input 
+                      type="number" 
+                      className="form-control text-lg font-bold text-green-600" 
+                      value={entryData.dividend_received} 
+                      onChange={(e) => setEntryData({...entryData, dividend_received: e.target.value})} 
+                      placeholder="e.g., 20000" 
+                      required 
+                    />
+                  </div>
+                </div>
+
+                {/* Live Calculation */}
+                {entryData.paid_amount && entryData.dividend_received && (
+                  <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-4 mt-4">
+                    <div className="grid grid-cols-3 gap-4 text-center">
+                      <div>
+                        <div className="text-xs text-gray-500">EMI Paid</div>
+                        <div className="text-lg font-bold text-red-600">₹{parseFloat(entryData.paid_amount).toLocaleString('en-IN')}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500">Mila (Profit)</div>
+                        <div className="text-lg font-bold text-green-600">₹{parseFloat(entryData.dividend_received).toLocaleString('en-IN')}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500">Effective Cost</div>
+                        <div className="text-lg font-bold text-purple-600">₹{calculateEffectiveCost().toLocaleString('en-IN')}</div>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -540,22 +588,21 @@ const ChitFund = () => {
                           <th>Month</th>
                           <th>Date</th>
                           <th className="text-right">EMI Paid</th>
-                          <th className="text-right">Auction</th>
-                          <th className="text-right text-green-600">Dividend</th>
-                          <th className="text-right">Net Cost</th>
+                          <th className="text-right text-green-600">Mila (Profit)</th>
+                          <th className="text-right">Effective Cost</th>
                           <th>Action</th>
                         </tr>
                       </thead>
                       <tbody>
                         {chitDetail.entries.map((entry, idx) => {
-                          const netCost = entry.paid_amount - entry.dividend;
+                          const dividend = entry.dividend_received || entry.dividend || 0;
+                          const netCost = entry.paid_amount - dividend;
                           return (
                             <tr key={entry.id || idx}>
-                              <td className="font-bold">{entry.month_number}</td>
+                              <td className="font-bold">Month {entry.month_number}</td>
                               <td>{format(new Date(entry.payment_date), "dd-MM-yyyy")}</td>
                               <td className="text-right text-red-600 font-medium">₹{entry.paid_amount?.toLocaleString('en-IN')}</td>
-                              <td className="text-right text-purple-600">₹{entry.auction_amount?.toLocaleString('en-IN')}</td>
-                              <td className="text-right text-green-600 font-bold">₹{entry.dividend?.toLocaleString('en-IN')}</td>
+                              <td className="text-right text-green-600 font-bold">₹{dividend?.toLocaleString('en-IN')}</td>
                               <td className="text-right font-medium">₹{netCost?.toLocaleString('en-IN')}</td>
                               <td>
                                 <button onClick={() => handleDeleteEntry(entry.id)} className="text-red-500 hover:text-red-700">
@@ -570,7 +617,6 @@ const ChitFund = () => {
                         <tr>
                           <td colSpan="2">Total</td>
                           <td className="text-right text-red-600">₹{chitDetail.summary?.total_paid?.toLocaleString('en-IN')}</td>
-                          <td></td>
                           <td className="text-right text-green-600">₹{chitDetail.summary?.total_dividend?.toLocaleString('en-IN')}</td>
                           <td className="text-right">₹{(chitDetail.summary?.total_paid - chitDetail.summary?.total_dividend)?.toLocaleString('en-IN')}</td>
                           <td></td>
