@@ -1,10 +1,10 @@
 import { useState, Component, useEffect, createContext } from "react";
-import axios from "axios";
 import "@/App.css";
 import { BrowserRouter, Routes, Route, NavLink, useLocation } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import api, { isElectron } from "@/utils/api";
 
 // Pages
 import Dashboard from "@/pages/Dashboard";
@@ -29,6 +29,7 @@ import Settings from "@/pages/Settings";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 export const API = `${BACKEND_URL}/api`;
+export { api, isElectron };
 
 // Financial Year Context
 export const FYContext = createContext({
@@ -81,14 +82,15 @@ const PasswordChangeModal = ({ onClose }) => {
     
     setLoading(true);
     try {
-      await axios.post(`${API}/auth/change-password`, {
-        current_password: currentPassword,
-        new_password: newPassword
-      });
-      toast.success("Password changed successfully!");
-      onClose();
+      const result = await api.changePassword(currentPassword, newPassword);
+      if (result.success === false) {
+        toast.error(result.error || "Failed to change password");
+      } else {
+        toast.success("Password changed successfully!");
+        onClose();
+      }
     } catch (error) {
-      toast.error(error.response?.data?.detail || "Failed to change password");
+      toast.error(error.message || "Failed to change password");
     } finally {
       setLoading(false);
     }
@@ -304,10 +306,10 @@ const Footer = () => {
       setSettings(JSON.parse(saved));
     }
     // Also fetch from API
-    axios.get(`${API}/settings`).then(res => {
-      if (res.data) {
-        setSettings(res.data);
-        localStorage.setItem('app_settings', JSON.stringify(res.data));
+    api.getSettings().then(data => {
+      if (data && data.company_name) {
+        setSettings(data);
+        localStorage.setItem('app_settings', JSON.stringify(data));
       }
     }).catch(() => {});
   }, []);
@@ -348,25 +350,20 @@ function App() {
 
   const fetchFY = async () => {
     try {
-      const [activeRes, allRes] = await Promise.all([
-        axios.get(`${API}/financial-years/active`),
-        axios.get(`${API}/financial-years`)
+      const [activeFYData, allFYData] = await Promise.all([
+        api.getActiveFY(),
+        api.getFinancialYears()
       ]);
-      setActiveFY(activeRes.data);
-      setFinancialYears(allRes.data.length > 0 ? allRes.data : [activeRes.data]);
+      setActiveFY(activeFYData);
+      setFinancialYears(allFYData.length > 0 ? allFYData : [activeFYData]);
     } catch (err) {
       console.error("Error fetching FY:", err);
     }
   };
 
   const handleFYChange = async (fy) => {
-    try {
-      await axios.put(`${API}/financial-years/${fy.id}/activate`);
-      setActiveFY(fy);
-      setFinancialYears(prev => prev.map(f => ({...f, is_active: f.id === fy.id})));
-    } catch (err) {
-      console.error("Error changing FY:", err);
-    }
+    setActiveFY(fy);
+    setFinancialYears(prev => prev.map(f => ({...f, is_active: f.id === fy.id})));
   };
 
   const handleLogout = () => {

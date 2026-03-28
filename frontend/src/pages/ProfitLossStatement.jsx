@@ -1,6 +1,6 @@
-import { useState, useEffect, useContext } from "react";
 import axios from "axios";
-import { API, FYContext } from "@/App";
+import { useState, useEffect, useContext } from "react";
+import { api, API, FYContext } from "@/App";
 import { format, subMonths } from "date-fns";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
@@ -51,7 +51,7 @@ const ProfitLossStatement = () => {
       }
       const [plRes, partiesRes] = await Promise.all([
         axios.get(url),
-        axios.get(`${API}/parties`)
+        api.getParties()
       ]);
       setPlData(plRes.data);
       setParties(partiesRes.data);

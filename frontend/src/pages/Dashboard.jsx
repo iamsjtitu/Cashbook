@@ -1,6 +1,6 @@
 import { useState, useEffect, useContext } from "react";
+import { api, API, FYContext } from "@/App";
 import axios from "axios";
-import { API, FYContext } from "@/App";
 import { format, subMonths } from "date-fns";
 import { NavLink } from "react-router-dom";
 
@@ -52,13 +52,13 @@ const Dashboard = () => {
         interestRes,
         plRes
       ] = await Promise.all([
-        axios.get(`${API}/staff`),
+        api.getStaff(),
         axios.get(`${API}/attendance/date/${today}`),
-        axios.get(`${API}/parties`),
+        api.getParties(),
         axios.get(`${API}/cashbook/monthly/${currentMonth}`),
-        axios.get(`${API}/chit-funds`),
+        api.getChitFunds(),
         axios.get(`${API}/expenses/summary/${currentMonth}`),
-        axios.get(`${API}/interest-accounts`),
+        api.getInterestAccounts(),
         axios.get(`${API}/reports/simple-profit-loss`)
       ]);
 

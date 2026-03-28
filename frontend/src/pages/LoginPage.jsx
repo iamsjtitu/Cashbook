@@ -1,6 +1,5 @@
 import { useState } from "react";
-import axios from "axios";
-import { API } from "@/App";
+import { api } from "@/App";
 import { toast } from "sonner";
 
 const LoginPage = ({ onLogin }) => {
@@ -17,12 +16,16 @@ const LoginPage = ({ onLogin }) => {
     
     setLoading(true);
     try {
-      await axios.post(`${API}/auth/login`, { password });
-      toast.success("Login successful!");
-      localStorage.setItem("isLoggedIn", "true");
-      onLogin();
+      const isValid = await api.login(password);
+      if (isValid) {
+        toast.success("Login successful!");
+        localStorage.setItem("isLoggedIn", "true");
+        onLogin();
+      } else {
+        toast.error("Wrong password!");
+      }
     } catch (error) {
-      toast.error(error.response?.data?.detail || "Wrong password!");
+      toast.error(error.message || "Wrong password!");
     } finally {
       setLoading(false);
     }
@@ -109,8 +112,8 @@ const LoginPage = ({ onLogin }) => {
 
         {/* Footer */}
         <div className="text-center mt-6 text-white/70 text-sm">
-          <p>Staff Manager v1.0.0</p>
-          <p>Built with Emergent</p>
+          <p>Staff Manager v1.1.0</p>
+          <p>Designed by: 9x.design</p>
         </div>
       </div>
     </div>

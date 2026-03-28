@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
-import { API } from "@/App";
+import { api } from "@/App";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
@@ -19,8 +18,8 @@ const StaffList = () => {
 
   const fetchStaff = async () => {
     try {
-      const response = await axios.get(`${API}/staff`);
-      setStaffList(response.data);
+      const data = await api.getStaff();
+      setStaffList(data);
     } catch (error) {
       toast.error("Failed to fetch staff list");
     } finally {
@@ -33,10 +32,10 @@ const StaffList = () => {
     try {
       const payload = { ...formData, monthly_salary: parseFloat(formData.monthly_salary) };
       if (editingStaff) {
-        await axios.put(`${API}/staff/${editingStaff.id}`, payload);
+        await api.updateStaff(editingStaff.id, payload);
         toast.success("Staff updated successfully!");
       } else {
-        await axios.post(`${API}/staff`, payload);
+        await api.createStaff(payload);
         toast.success("Staff added successfully!");
       }
       setShowModal(false);
@@ -57,7 +56,7 @@ const StaffList = () => {
   const handleDelete = async (staffId) => {
     if (!window.confirm("Are you sure you want to delete this staff?")) return;
     try {
-      await axios.delete(`${API}/staff/${staffId}`);
+      await api.deleteStaff(staffId);
       toast.success("Staff deleted!");
       fetchStaff();
     } catch (error) {

@@ -142,6 +142,11 @@
   - Backup files usi folder mein save honge (StaffManager_Backups subfolder)
   - Auto Backup: Daily/Weekly automatic backup option
   - Saved Backups list: See and restore from any previous backup
+- [x] **NeDB Embedded Database** (March 2026):
+  - Standalone desktop app - no server required
+  - Data stored locally in AppData folder
+  - Works offline
+  - api.js wrapper: Single API for both Electron (IPC) and Web (HTTP)
 
 ## Account Head System (New)
 Ledgers can now be categorized with Account Heads:

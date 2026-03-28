@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import axios from "axios";
-import { API } from "@/App";
+import { api } from "@/App";
 import { toast } from "sonner";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, addMonths, subMonths, getDay } from "date-fns";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
@@ -18,9 +17,9 @@ const Attendance = () => {
     if (!selectedStaff) return;
     try {
       const month = format(currentMonth, "yyyy-MM");
-      const response = await axios.get(`${API}/attendance/${selectedStaff.id}/${month}`);
+      const data = await api.getAttendanceByStaffMonth(selectedStaff.id, month);
       const attendanceMap = {};
-      response.data.forEach((att) => { attendanceMap[att.date] = att.status; });
+      (data || []).forEach((att) => { attendanceMap[att.date] = att.status; });
       setAttendance(attendanceMap);
     } catch (error) {
       console.error("Error fetching attendance:", error);
@@ -32,9 +31,9 @@ const Attendance = () => {
 
   const fetchStaff = async () => {
     try {
-      const response = await axios.get(`${API}/staff`);
-      setStaffList(response.data);
-      if (response.data.length > 0) setSelectedStaff(response.data[0]);
+      const data = await api.getStaff();
+      setStaffList(data);
+      if (data.length > 0) setSelectedStaff(data[0]);
     } catch (error) {
       toast.error("Failed to fetch staff");
     } finally {
@@ -45,7 +44,7 @@ const Attendance = () => {
   const markAttendance = async (date, status) => {
     if (!selectedStaff) return;
     try {
-      await axios.post(`${API}/attendance`, { staff_id: selectedStaff.id, date: format(date, "yyyy-MM-dd"), status });
+      await api.markAttendance({ staff_id: selectedStaff.id, date: format(date, "yyyy-MM-dd"), status });
       setAttendance((prev) => ({ ...prev, [format(date, "yyyy-MM-dd")]: status }));
       toast.success(`Marked ${status.replace("_", " ")} for ${format(date, "d MMM")}`);
     } catch (error) {
@@ -67,7 +66,7 @@ const Attendance = () => {
     
     for (const staff of staffList) {
       try {
-        await axios.post(`${API}/attendance`, { staff_id: staff.id, date: today, status });
+        await api.markAttendance({ staff_id: staff.id, date: today, status });
         successCount++;
       } catch (error) {
         failCount++;
@@ -76,7 +75,6 @@ const Attendance = () => {
     
     if (successCount > 0) {
       toast.success(`${successCount} staff marked ${status.replace("_", " ")} for today!`);
-      // Refresh current staff's attendance
       if (selectedStaff) fetchAttendance();
     }
     if (failCount > 0) {
@@ -101,7 +99,7 @@ const Attendance = () => {
     let successCount = 0;
     for (const day of days) {
       try {
-        await axios.post(`${API}/attendance`, { staff_id: selectedStaff.id, date: format(day, "yyyy-MM-dd"), status });
+        await api.markAttendance({ staff_id: selectedStaff.id, date: format(day, "yyyy-MM-dd"), status });
         successCount++;
       } catch (error) {
         console.error("Error marking:", error);
