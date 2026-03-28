@@ -375,15 +375,15 @@ class LedgerEntry(BaseModel):
     payment_mode: PaymentMode
     transaction_id: str
 
-# Chit Fund Models
+# Chit Fund Models - Single User Tracking
 class ChitFundBase(BaseModel):
-    name: str  # Chit fund name
-    total_amount: float  # Total chit amount (e.g., 5,00,000)
-    monthly_installment: float  # Monthly payment amount
-    total_members: int  # Number of members
-    duration_months: int  # Total duration in months
+    name: str  # Chit fund name (e.g., "XYZ Chit Fund")
+    chit_value: float  # Total chit value (e.g., 10,00,000)
+    monthly_installment: float  # User's monthly EMI (e.g., 50,000)
+    total_members: int  # Number of members (e.g., 20)
+    duration_months: int  # Total months (usually = total_members)
     start_date: str  # YYYY-MM-DD
-    organizer: Optional[str] = None  # Chit company/organizer name
+    organizer: Optional[str] = None  # Chit company name
     note: Optional[str] = None
 
 class ChitFundCreate(ChitFundBase):
@@ -393,11 +393,14 @@ class ChitFund(ChitFundBase):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     is_active: bool = True
-    is_won: bool = False  # Has user won the chit?
-    won_month: Optional[int] = None  # Which month user won
-    won_amount: Optional[float] = None  # Amount received when won
-    total_paid: float = 0.0  # Total installments paid so far
-    payments_count: int = 0  # Number of payments made
+    # Lifted (Uthaya) tracking
+    is_lifted: bool = False  # Did user lift/win this chit?
+    lifted_month: Optional[int] = None  # Which month user lifted
+    lifted_amount: Optional[float] = None  # Amount received when lifted
+    # Totals (auto-calculated)
+    total_paid: float = 0.0  # Sum of all EMIs paid
+    total_dividend: float = 0.0  # Sum of all monthly dividends
+    payments_count: int = 0  # Number of months paid
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 class ChitFundUpdate(BaseModel):
@@ -406,22 +409,25 @@ class ChitFundUpdate(BaseModel):
     note: Optional[str] = None
     is_active: Optional[bool] = None
 
-# Chit Fund Payment Record
-class ChitPaymentBase(BaseModel):
+# Chit Fund Monthly Entry - Track each month's payment and dividend
+class ChitMonthlyEntryBase(BaseModel):
     chit_id: str
-    month_number: int  # Which month's payment (1, 2, 3...)
-    amount: float
+    month_number: int  # Which month (1, 2, 3...)
     payment_date: str  # YYYY-MM-DD
+    paid_amount: float  # EMI paid this month
+    auction_amount: float  # Winning bid amount this month (e.g., 7,00,000)
     payment_mode: PaymentMode
     note: Optional[str] = None
 
-class ChitPaymentCreate(ChitPaymentBase):
+class ChitMonthlyEntryCreate(ChitMonthlyEntryBase):
     pass
 
-class ChitPayment(ChitPaymentBase):
+class ChitMonthlyEntry(ChitMonthlyEntryBase):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    transaction_id: Optional[str] = None  # Link to cash book
+    # Auto-calculated fields
+    dividend: float = 0.0  # (chit_value - auction_amount) / total_members
+    transaction_id: Optional[str] = None  # Link to cash book (for EMI payment)
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 # Staff APIs
@@ -1423,7 +1429,7 @@ async def get_payment_mode_report(month: str):
         "by_payment_mode": dict(mode_data)
     }
 
-# ==================== CHIT FUND APIs ====================
+# ==================== CHIT FUND APIs (Single User Tracking) ====================
 
 @api_router.post("/chit-funds", response_model=ChitFund)
 async def create_chit_fund(chit: ChitFundCreate):
@@ -1432,17 +1438,34 @@ async def create_chit_fund(chit: ChitFundCreate):
     await db.chit_funds.insert_one(doc)
     return chit_obj
 
+def migrate_chit_data(chit: dict) -> dict:
+    """Migrate old chit data format to new format"""
+    # Handle old field names -> new field names
+    if "total_amount" in chit and "chit_value" not in chit:
+        chit["chit_value"] = chit.pop("total_amount")
+    if "is_won" in chit and "is_lifted" not in chit:
+        chit["is_lifted"] = chit.pop("is_won")
+    if "won_month" in chit and "lifted_month" not in chit:
+        chit["lifted_month"] = chit.pop("won_month")
+    if "won_amount" in chit and "lifted_amount" not in chit:
+        chit["lifted_amount"] = chit.pop("won_amount")
+    # Ensure new fields have defaults
+    if "total_dividend" not in chit:
+        chit["total_dividend"] = 0.0
+    return chit
+
 @api_router.get("/chit-funds", response_model=List[ChitFund])
 async def get_all_chit_funds():
     chits = await db.chit_funds.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
-    return chits
+    # Migrate old data format to new format
+    return [migrate_chit_data(chit) for chit in chits]
 
 @api_router.get("/chit-funds/{chit_id}", response_model=ChitFund)
 async def get_chit_fund(chit_id: str):
     chit = await db.chit_funds.find_one({"id": chit_id}, {"_id": 0})
     if not chit:
         raise HTTPException(status_code=404, detail="Chit fund not found")
-    return chit
+    return migrate_chit_data(chit)
 
 @api_router.put("/chit-funds/{chit_id}", response_model=ChitFund)
 async def update_chit_fund(chit_id: str, chit_update: ChitFundUpdate):
@@ -1459,80 +1482,99 @@ async def update_chit_fund(chit_id: str, chit_update: ChitFundUpdate):
 
 @api_router.delete("/chit-funds/{chit_id}")
 async def delete_chit_fund(chit_id: str):
-    # Check if chit has payments
-    payment_count = await db.chit_payments.count_documents({"chit_id": chit_id})
-    if payment_count > 0:
-        raise HTTPException(status_code=400, detail=f"Cannot delete chit with {payment_count} payments")
+    # Check if chit has entries
+    entry_count = await db.chit_monthly_entries.count_documents({"chit_id": chit_id})
+    if entry_count > 0:
+        raise HTTPException(status_code=400, detail=f"Cannot delete chit with {entry_count} monthly entries. Delete entries first.")
     
     result = await db.chit_funds.delete_one({"id": chit_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Chit fund not found")
     return {"message": "Chit fund deleted"}
 
-# Pay Chit Installment
-@api_router.post("/chit-funds/{chit_id}/pay", response_model=ChitPayment)
-async def pay_chit_installment(chit_id: str, payment: ChitPaymentCreate):
-    """Pay monthly chit installment - auto-links to cash book"""
+# Add Monthly Entry (EMI + Auction Amount = Auto-calculate Dividend)
+@api_router.post("/chit-funds/{chit_id}/monthly-entry")
+async def add_chit_monthly_entry(chit_id: str, entry: ChitMonthlyEntryCreate):
+    """Add monthly entry - EMI payment + this month's auction amount = auto-calculate dividend"""
     chit = await db.chit_funds.find_one({"id": chit_id}, {"_id": 0})
     if not chit:
         raise HTTPException(status_code=404, detail="Chit fund not found")
     
-    # Check if this month's payment already exists
-    existing = await db.chit_payments.find_one({
+    # Check if this month's entry already exists
+    existing = await db.chit_monthly_entries.find_one({
         "chit_id": chit_id,
-        "month_number": payment.month_number
+        "month_number": entry.month_number
     })
     if existing:
-        raise HTTPException(status_code=400, detail=f"Payment for month {payment.month_number} already exists")
+        raise HTTPException(status_code=400, detail=f"Entry for month {entry.month_number} already exists")
     
-    # Create payment record
-    payment_obj = ChitPayment(**payment.model_dump())
+    # Calculate dividend
+    # Dividend = (Chit Value - Auction Amount) / Total Members
+    chit_value = chit.get("chit_value", 0)
+    total_members = chit.get("total_members", 1)
+    dividend = (chit_value - entry.auction_amount) / total_members
     
-    # Auto-create transaction in cash book (Debit - money going out)
+    # Create entry
+    entry_obj = ChitMonthlyEntry(**entry.model_dump())
+    entry_obj.dividend = round(dividend, 2)
+    
+    # Auto-create transaction in cash book (Debit - EMI going out)
     txn = Transaction(
-        date=payment.payment_date,
+        date=entry.payment_date,
         transaction_type=TransactionType.DEBIT,
-        amount=payment.amount,
-        payment_mode=payment.payment_mode,
-        description=f"Chit Fund: {chit['name']} - Month {payment.month_number} Installment",
+        amount=entry.paid_amount,
+        payment_mode=entry.payment_mode,
+        description=f"Chit: {chit['name']} - Month {entry.month_number} EMI | Auction: ₹{entry.auction_amount:,.0f} | Dividend: ₹{dividend:,.0f}",
         category=ExpenseCategory.CHIT_FUND,
         reference_id=chit_id,
-        reference_type="chit_payment"
+        reference_type="chit_monthly"
     )
     await db.transactions.insert_one(txn.model_dump())
-    payment_obj.transaction_id = txn.id
+    entry_obj.transaction_id = txn.id
     
-    # Save payment
-    await db.chit_payments.insert_one(payment_obj.model_dump())
+    # Save entry
+    await db.chit_monthly_entries.insert_one(entry_obj.model_dump())
     
     # Update chit fund totals
     await db.chit_funds.update_one(
         {"id": chit_id},
         {
-            "$inc": {"total_paid": payment.amount, "payments_count": 1}
+            "$inc": {
+                "total_paid": entry.paid_amount,
+                "total_dividend": dividend,
+                "payments_count": 1
+            }
         }
     )
     
-    return payment_obj
+    return {
+        "message": "Monthly entry added",
+        "month": entry.month_number,
+        "paid": entry.paid_amount,
+        "auction_amount": entry.auction_amount,
+        "dividend": dividend,
+        "effective_cost": entry.paid_amount - dividend,
+        "transaction_id": txn.id
+    }
 
-# Get Chit Payments
-@api_router.get("/chit-funds/{chit_id}/payments", response_model=List[ChitPayment])
-async def get_chit_payments(chit_id: str):
-    payments = await db.chit_payments.find(
+# Get all monthly entries for a chit
+@api_router.get("/chit-funds/{chit_id}/monthly-entries")
+async def get_chit_monthly_entries(chit_id: str):
+    entries = await db.chit_monthly_entries.find(
         {"chit_id": chit_id}, {"_id": 0}
     ).sort("month_number", 1).to_list(1000)
-    return payments
+    return entries
 
-# Mark Chit as Won
-@api_router.post("/chit-funds/{chit_id}/win")
-async def mark_chit_won(chit_id: str, won_month: int, won_amount: float, payment_mode: PaymentMode = PaymentMode.BANK_TRANSFER):
-    """Mark chit as won and add credit entry to cash book"""
+# Mark Chit as Lifted (Uthaya)
+@api_router.post("/chit-funds/{chit_id}/lift")
+async def lift_chit(chit_id: str, lifted_month: int, lifted_amount: float, payment_mode: PaymentMode = PaymentMode.BANK_TRANSFER):
+    """Mark chit as lifted (user won the bid) and add credit entry to cash book"""
     chit = await db.chit_funds.find_one({"id": chit_id}, {"_id": 0})
     if not chit:
         raise HTTPException(status_code=404, detail="Chit fund not found")
     
-    if chit.get("is_won"):
-        raise HTTPException(status_code=400, detail="Chit already marked as won")
+    if chit.get("is_lifted"):
+        raise HTTPException(status_code=400, detail="Chit already lifted")
     
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     
@@ -1540,12 +1582,12 @@ async def mark_chit_won(chit_id: str, won_month: int, won_amount: float, payment
     txn = Transaction(
         date=today,
         transaction_type=TransactionType.CREDIT,
-        amount=won_amount,
+        amount=lifted_amount,
         payment_mode=payment_mode,
-        description=f"Chit Fund Won: {chit['name']} - Month {won_month}",
+        description=f"Chit Lifted: {chit['name']} - Month {lifted_month} | Received: ₹{lifted_amount:,.0f}",
         category=None,
         reference_id=chit_id,
-        reference_type="chit_won"
+        reference_type="chit_lifted"
     )
     await db.transactions.insert_one(txn.model_dump())
     
@@ -1554,66 +1596,132 @@ async def mark_chit_won(chit_id: str, won_month: int, won_amount: float, payment
         {"id": chit_id},
         {
             "$set": {
-                "is_won": True,
-                "won_month": won_month,
-                "won_amount": won_amount
+                "is_lifted": True,
+                "lifted_month": lifted_month,
+                "lifted_amount": lifted_amount
             }
         }
     )
     
     return {
-        "message": "Chit marked as won",
+        "message": "Chit lifted successfully",
         "chit_name": chit["name"],
-        "won_month": won_month,
-        "won_amount": won_amount,
+        "lifted_month": lifted_month,
+        "lifted_amount": lifted_amount,
         "transaction_id": txn.id
     }
 
-# Delete Chit Payment
-@api_router.delete("/chit-payments/{payment_id}")
-async def delete_chit_payment(payment_id: str):
-    payment = await db.chit_payments.find_one({"id": payment_id}, {"_id": 0})
-    if not payment:
-        raise HTTPException(status_code=404, detail="Payment not found")
+# Delete Monthly Entry
+@api_router.delete("/chit-monthly-entries/{entry_id}")
+async def delete_chit_monthly_entry(entry_id: str):
+    entry = await db.chit_monthly_entries.find_one({"id": entry_id}, {"_id": 0})
+    if not entry:
+        raise HTTPException(status_code=404, detail="Entry not found")
     
     # Delete linked transaction
-    if payment.get("transaction_id"):
-        await db.transactions.delete_one({"id": payment["transaction_id"]})
+    if entry.get("transaction_id"):
+        await db.transactions.delete_one({"id": entry["transaction_id"]})
     
     # Update chit fund totals
     await db.chit_funds.update_one(
-        {"id": payment["chit_id"]},
+        {"id": entry["chit_id"]},
         {
-            "$inc": {"total_paid": -payment["amount"], "payments_count": -1}
+            "$inc": {
+                "total_paid": -entry["paid_amount"],
+                "total_dividend": -entry["dividend"],
+                "payments_count": -1
+            }
         }
     )
     
-    await db.chit_payments.delete_one({"id": payment_id})
-    return {"message": "Payment deleted"}
+    await db.chit_monthly_entries.delete_one({"id": entry_id})
+    return {"message": "Entry deleted"}
 
-# Chit Fund Summary
+# Get Chit Fund Complete Summary (Final Profit Calculation)
+@api_router.get("/chit-funds/{chit_id}/summary")
+async def get_chit_summary_single(chit_id: str):
+    """Get complete summary of a chit - Total Paid, Dividends, Lifted Amount, Net Profit"""
+    chit = await db.chit_funds.find_one({"id": chit_id}, {"_id": 0})
+    if not chit:
+        raise HTTPException(status_code=404, detail="Chit fund not found")
+    
+    # Migrate old data format
+    chit = migrate_chit_data(chit)
+    
+    entries = await db.chit_monthly_entries.find(
+        {"chit_id": chit_id}, {"_id": 0}
+    ).sort("month_number", 1).to_list(1000)
+    
+    total_paid = chit.get("total_paid", 0)
+    total_dividend = chit.get("total_dividend", 0)
+    lifted_amount = chit.get("lifted_amount", 0) or 0 if chit.get("is_lifted") else 0
+    
+    # Net Profit = Total Dividend + Lifted Amount - Total Paid
+    # If not lifted yet, we show projected profit based on dividends
+    if chit.get("is_lifted"):
+        # Chit completed perspective: Profit = What I got - What I paid
+        # What I got = Lifted Amount + All Dividends
+        # What I paid = All EMIs
+        net_profit = lifted_amount + total_dividend - total_paid
+    else:
+        # Chit ongoing: Show dividend earned so far as "savings"
+        net_profit = total_dividend  # Dividend is effectively money saved
+    
+    # Remaining months
+    remaining_months = chit.get("duration_months", 0) - chit.get("payments_count", 0)
+    remaining_amount = remaining_months * chit.get("monthly_installment", 0)
+    
+    return {
+        "chit": chit,
+        "entries": entries,
+        "summary": {
+            "total_paid": total_paid,
+            "total_dividend": total_dividend,
+            "is_lifted": chit.get("is_lifted", False),
+            "lifted_amount": lifted_amount,
+            "lifted_month": chit.get("lifted_month"),
+            "net_profit": net_profit,
+            "is_profit": net_profit >= 0,
+            "months_completed": chit.get("payments_count", 0),
+            "remaining_months": remaining_months,
+            "remaining_amount": remaining_amount,
+            "effective_cost_per_month": (total_paid - total_dividend) / max(chit.get("payments_count", 1), 1)
+        }
+    }
+
+# Overall Chit Summary
 @api_router.get("/chit-funds/summary/all")
-async def get_chit_summary():
+async def get_chit_summary_all():
     chits = await db.chit_funds.find({}, {"_id": 0}).to_list(1000)
+    # Migrate old data format
+    chits = [migrate_chit_data(c) for c in chits]
     
-    active_chits = [c for c in chits if c.get("is_active", True)]
-    won_chits = [c for c in chits if c.get("is_won", False)]
+    active_chits = [c for c in chits if c.get("is_active", True) and not c.get("is_lifted", False)]
+    lifted_chits = [c for c in chits if c.get("is_lifted", False)]
     
-    total_invested = sum(c.get("total_paid", 0) for c in chits)
-    total_won = sum(c.get("won_amount", 0) for c in won_chits)
+    total_paid = sum(c.get("total_paid", 0) for c in chits)
+    total_dividend = sum(c.get("total_dividend", 0) for c in chits)
+    total_lifted = sum(c.get("lifted_amount", 0) or 0 for c in lifted_chits)
+    
+    # Remaining investment needed
     total_remaining = sum(
-        (c["monthly_installment"] * c["duration_months"]) - c.get("total_paid", 0) 
+        (c.get("monthly_installment", 0) * c.get("duration_months", 0)) - c.get("total_paid", 0) 
         for c in active_chits
     )
+    
+    # Net position
+    net_profit = total_dividend + total_lifted - total_paid
     
     return {
         "total_chits": len(chits),
         "active_chits": len(active_chits),
-        "won_chits": len(won_chits),
-        "total_invested": total_invested,
-        "total_won": total_won,
-        "total_remaining": total_remaining,
-        "net_position": total_won - total_invested
+        "lifted_chits": len(lifted_chits),
+        "total_paid": total_paid,
+        "total_dividend": total_dividend,
+        "total_lifted": total_lifted,
+        "net_profit": net_profit,
+        "is_profit": net_profit >= 0,
+        "remaining_investment": total_remaining
     }
 
 # ==================== PROPER ACCOUNTING APIs ====================

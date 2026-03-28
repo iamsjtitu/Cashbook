@@ -3,24 +3,21 @@ import axios from "axios";
 import { API } from "@/App";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 const ChitFund = () => {
   const [chits, setChits] = useState([]);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [showPayModal, setShowPayModal] = useState(false);
-  const [showWinModal, setShowWinModal] = useState(false);
-  const [showPaymentsModal, setShowPaymentsModal] = useState(false);
+  const [showEntryModal, setShowEntryModal] = useState(false);
+  const [showLiftModal, setShowLiftModal] = useState(false);
+  const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedChit, setSelectedChit] = useState(null);
-  const [payments, setPayments] = useState([]);
-  const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [chitDetail, setChitDetail] = useState(null);
   
   const [formData, setFormData] = useState({
     name: "",
-    total_amount: "",
+    chit_value: "",
     monthly_installment: "",
     total_members: "",
     duration_months: "",
@@ -29,17 +26,18 @@ const ChitFund = () => {
     note: ""
   });
   
-  const [payData, setPayData] = useState({
+  const [entryData, setEntryData] = useState({
     month_number: 1,
-    amount: "",
+    paid_amount: "",
+    auction_amount: "",
     payment_date: format(new Date(), "yyyy-MM-dd"),
     payment_mode: "cash",
     note: ""
   });
   
-  const [winData, setWinData] = useState({
-    won_month: 1,
-    won_amount: "",
+  const [liftData, setLiftData] = useState({
+    lifted_month: 1,
+    lifted_amount: "",
     payment_mode: "bank_transfer"
   });
 
@@ -65,65 +63,68 @@ const ChitFund = () => {
     try {
       await axios.post(`${API}/chit-funds`, {
         ...formData,
-        total_amount: parseFloat(formData.total_amount),
+        chit_value: parseFloat(formData.chit_value),
         monthly_installment: parseFloat(formData.monthly_installment),
         total_members: parseInt(formData.total_members),
         duration_months: parseInt(formData.duration_months)
       });
-      toast.success("Chit Fund added!");
+      toast.success("Chit Fund add ho gaya!");
       setShowModal(false);
-      setFormData({ name: "", total_amount: "", monthly_installment: "", total_members: "", duration_months: "", start_date: format(new Date(), "yyyy-MM-dd"), organizer: "", note: "" });
+      setFormData({ name: "", chit_value: "", monthly_installment: "", total_members: "", duration_months: "", start_date: format(new Date(), "yyyy-MM-dd"), organizer: "", note: "" });
       fetchData();
     } catch (error) {
       toast.error("Failed to add chit fund");
     }
   };
 
-  const handlePay = async (e) => {
+  const handleAddEntry = async (e) => {
     e.preventDefault();
     try {
-      await axios.post(`${API}/chit-funds/${selectedChit.id}/pay`, {
+      const res = await axios.post(`${API}/chit-funds/${selectedChit.id}/monthly-entry`, {
         chit_id: selectedChit.id,
-        ...payData,
-        amount: parseFloat(payData.amount)
+        ...entryData,
+        paid_amount: parseFloat(entryData.paid_amount),
+        auction_amount: parseFloat(entryData.auction_amount)
       });
-      toast.success("Payment recorded & added to Cash Book!");
-      setShowPayModal(false);
+      toast.success(`Month ${entryData.month_number} entry added! Dividend: ₹${res.data.dividend?.toLocaleString('en-IN')}`);
+      setShowEntryModal(false);
       fetchData();
+      if (showDetailModal) fetchChitDetail(selectedChit);
     } catch (error) {
-      toast.error(error.response?.data?.detail || "Failed to record payment");
+      toast.error(error.response?.data?.detail || "Failed to add entry");
     }
   };
 
-  const handleWin = async (e) => {
+  const handleLift = async (e) => {
     e.preventDefault();
     try {
-      await axios.post(`${API}/chit-funds/${selectedChit.id}/win?won_month=${winData.won_month}&won_amount=${winData.won_amount}&payment_mode=${winData.payment_mode}`);
-      toast.success("Chit Won! Amount added to Cash Book!");
-      setShowWinModal(false);
+      await axios.post(`${API}/chit-funds/${selectedChit.id}/lift?lifted_month=${liftData.lifted_month}&lifted_amount=${liftData.lifted_amount}&payment_mode=${liftData.payment_mode}`);
+      toast.success("Chit Lifted! Amount Cash Book me add ho gaya!");
+      setShowLiftModal(false);
       fetchData();
+      if (showDetailModal) fetchChitDetail(selectedChit);
     } catch (error) {
-      toast.error(error.response?.data?.detail || "Failed to mark as won");
+      toast.error(error.response?.data?.detail || "Failed to lift chit");
     }
   };
 
-  const fetchPayments = async (chit) => {
+  const fetchChitDetail = async (chit) => {
     setSelectedChit(chit);
     try {
-      const res = await axios.get(`${API}/chit-funds/${chit.id}/payments`);
-      setPayments(res.data);
-      setShowPaymentsModal(true);
+      const res = await axios.get(`${API}/chit-funds/${chit.id}/summary`);
+      setChitDetail(res.data);
+      setShowDetailModal(true);
     } catch (error) {
-      toast.error("Failed to fetch payments");
+      toast.error("Failed to fetch details");
     }
   };
 
-  const handleDeletePayment = async (paymentId) => {
-    if (!window.confirm("Delete this payment?")) return;
+  const handleDeleteEntry = async (entryId) => {
+    if (!window.confirm("Delete this entry?")) return;
     try {
-      await axios.delete(`${API}/chit-payments/${paymentId}`);
-      toast.success("Payment deleted!");
-      fetchPayments(selectedChit);
+      await axios.delete(`${API}/chit-monthly-entries/${entryId}`);
+      toast.success("Entry deleted!");
+      fetchChitDetail(selectedChit);
       fetchData();
     } catch (error) {
       toast.error("Failed to delete");
@@ -141,26 +142,35 @@ const ChitFund = () => {
     }
   };
 
-  const openPayModal = (chit) => {
+  const openEntryModal = (chit) => {
     setSelectedChit(chit);
-    setPayData({
-      month_number: chit.payments_count + 1,
-      amount: chit.monthly_installment.toString(),
+    setEntryData({
+      month_number: (chit.payments_count || 0) + 1,
+      paid_amount: chit.monthly_installment?.toString() || "",
+      auction_amount: "",
       payment_date: format(new Date(), "yyyy-MM-dd"),
       payment_mode: "cash",
       note: ""
     });
-    setShowPayModal(true);
+    setShowEntryModal(true);
   };
 
-  const openWinModal = (chit) => {
+  const openLiftModal = (chit) => {
     setSelectedChit(chit);
-    setWinData({
-      won_month: chit.payments_count || 1,
-      won_amount: chit.total_amount.toString(),
+    setLiftData({
+      lifted_month: (chit.payments_count || 0) + 1,
+      lifted_amount: chit.chit_value?.toString() || "",
       payment_mode: "bank_transfer"
     });
-    setShowWinModal(true);
+    setShowLiftModal(true);
+  };
+
+  // Calculate expected dividend based on auction amount
+  const calculateExpectedDividend = () => {
+    if (!selectedChit || !entryData.auction_amount) return 0;
+    const chitValue = selectedChit.chit_value || 0;
+    const members = selectedChit.total_members || 1;
+    return Math.round((chitValue - parseFloat(entryData.auction_amount)) / members);
   };
 
   if (loading) return <div className="text-center py-8">Loading...</div>;
@@ -181,16 +191,18 @@ const ChitFund = () => {
           <div className="stat-box-value primary">{summary?.active_chits || 0}</div>
         </div>
         <div className="stat-box">
-          <div className="stat-box-label">Total Invested</div>
-          <div className="stat-box-value danger">₹{summary?.total_invested?.toLocaleString('en-IN') || 0}</div>
+          <div className="stat-box-label">Total Paid (भुगतान)</div>
+          <div className="stat-box-value danger">₹{summary?.total_paid?.toLocaleString('en-IN') || 0}</div>
         </div>
         <div className="stat-box">
-          <div className="stat-box-label">Total Won</div>
-          <div className="stat-box-value success">₹{summary?.total_won?.toLocaleString('en-IN') || 0}</div>
+          <div className="stat-box-label">Total Dividend (लाभांश)</div>
+          <div className="stat-box-value success">₹{summary?.total_dividend?.toLocaleString('en-IN') || 0}</div>
         </div>
         <div className="stat-box">
-          <div className="stat-box-label">Remaining to Pay</div>
-          <div className="stat-box-value warning">₹{summary?.total_remaining?.toLocaleString('en-IN') || 0}</div>
+          <div className="stat-box-label">Net Profit (शुद्ध लाभ)</div>
+          <div className={`stat-box-value ${summary?.is_profit ? 'success' : 'danger'}`}>
+            {summary?.is_profit ? '+' : ''}₹{summary?.net_profit?.toLocaleString('en-IN') || 0}
+          </div>
         </div>
       </div>
 
@@ -198,20 +210,23 @@ const ChitFund = () => {
       <div className="bg-gradient-to-r from-purple-50 to-pink-50 border-l-4 border-purple-500 p-4 rounded-lg mb-4">
         <div className="flex items-center gap-2 text-purple-800">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-          <span className="font-medium">Chit Fund Tracking</span>
+          <span className="font-medium">Chit Fund System - Kaise Kaam Karta Hai?</span>
         </div>
-        <p className="text-sm text-purple-700 mt-1">Track your chit fund memberships. Monthly payments auto-add to Cash Book as debit. When you win, the amount adds as credit.</p>
+        <p className="text-sm text-purple-700 mt-1">
+          <strong>Example:</strong> EMI ₹50,000 | Auction me ₹30,000 me gaya | Aapka Dividend = ₹20,000<br/>
+          Har month auction amount enter karo → Dividend auto-calculate hoga. Jab uthao (lift karo), wo bhi track hoga.
+        </p>
       </div>
 
       {/* Chits List */}
       <div className="data-card">
         <div className="data-card-header">
-          <div className="data-card-title">My Chit Funds</div>
+          <div className="data-card-title">My Chit Funds (मेरे चिट फंड)</div>
         </div>
         <div className="data-card-body p-0">
           {chits.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
-              <p>No chit funds yet</p>
+              <p>No chit funds yet. Add your first chit!</p>
               <button onClick={() => setShowModal(true)} className="btn btn-primary mt-3">Add First Chit</button>
             </div>
           ) : (
@@ -219,10 +234,10 @@ const ChitFund = () => {
               <thead>
                 <tr>
                   <th>Chit Name</th>
-                  <th>Total Amount</th>
-                  <th>Monthly</th>
-                  <th>Duration</th>
-                  <th>Paid</th>
+                  <th>Chit Value</th>
+                  <th>Monthly EMI</th>
+                  <th>Progress</th>
+                  <th>Total Dividend</th>
                   <th>Status</th>
                   <th>Actions</th>
                 </tr>
@@ -234,17 +249,27 @@ const ChitFund = () => {
                       <div className="font-medium">{chit.name}</div>
                       {chit.organizer && <div className="text-xs text-gray-500">{chit.organizer}</div>}
                     </td>
-                    <td className="font-bold text-purple-600">₹{chit.total_amount.toLocaleString('en-IN')}</td>
-                    <td>₹{chit.monthly_installment.toLocaleString('en-IN')}</td>
-                    <td>{chit.duration_months} months</td>
+                    <td className="font-bold text-purple-600">₹{(chit.chit_value || chit.total_amount)?.toLocaleString('en-IN')}</td>
+                    <td>₹{chit.monthly_installment?.toLocaleString('en-IN')}</td>
                     <td>
-                      <div className="font-medium">{chit.payments_count}/{chit.duration_months}</div>
-                      <div className="text-xs text-gray-500">₹{chit.total_paid?.toLocaleString('en-IN') || 0}</div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden" style={{minWidth: '60px'}}>
+                          <div 
+                            className="h-full bg-purple-500 rounded-full" 
+                            style={{width: `${((chit.payments_count || 0) / chit.duration_months) * 100}%`}}
+                          ></div>
+                        </div>
+                        <span className="text-xs font-medium">{chit.payments_count || 0}/{chit.duration_months}</span>
+                      </div>
+                      <div className="text-xs text-gray-500">Paid: ₹{chit.total_paid?.toLocaleString('en-IN') || 0}</div>
                     </td>
                     <td>
-                      {chit.is_won ? (
+                      <div className="font-bold text-green-600">₹{chit.total_dividend?.toLocaleString('en-IN') || 0}</div>
+                    </td>
+                    <td>
+                      {chit.is_lifted ? (
                         <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-medium">
-                          WON (Month {chit.won_month})
+                          LIFTED (Month {chit.lifted_month})
                         </span>
                       ) : chit.is_active ? (
                         <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs font-medium">Active</span>
@@ -254,16 +279,16 @@ const ChitFund = () => {
                     </td>
                     <td>
                       <div className="flex gap-1 flex-wrap">
-                        <button onClick={() => openPayModal(chit)} className="action-btn success text-xs px-2 py-1" disabled={chit.payments_count >= chit.duration_months}>
-                          Pay
+                        <button onClick={() => openEntryModal(chit)} className="action-btn success text-xs px-2 py-1" title="Add Monthly Entry">
+                          + Entry
                         </button>
-                        {!chit.is_won && (
-                          <button onClick={() => openWinModal(chit)} className="action-btn primary text-xs px-2 py-1">
-                            Won
+                        {!chit.is_lifted && (
+                          <button onClick={() => openLiftModal(chit)} className="action-btn warning text-xs px-2 py-1" title="Mark as Lifted">
+                            Lift
                           </button>
                         )}
-                        <button onClick={() => fetchPayments(chit)} className="text-blue-500 hover:text-blue-700" title="View Payments">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                        <button onClick={() => fetchChitDetail(chit)} className="text-blue-500 hover:text-blue-700" title="View Details">
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
                         </button>
                         <button onClick={() => handleDelete(chit.id)} className="text-red-500 hover:text-red-700" title="Delete">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
@@ -283,32 +308,32 @@ const ChitFund = () => {
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <div className="modal-title">Add Chit Fund</div>
+              <div className="modal-title">Add Chit Fund (नया चिट फंड)</div>
               <button className="modal-close" onClick={() => setShowModal(false)}>&times;</button>
             </div>
             <form onSubmit={handleSubmit}>
               <div className="modal-body">
                 <div className="form-group">
                   <label className="form-label">Chit Name *</label>
-                  <input type="text" className="form-control" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} placeholder="e.g., Navkar Chit 5 Lakh" required />
+                  <input type="text" className="form-control" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} placeholder="e.g., Navkar Chit 10 Lakh" required />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="form-group">
-                    <label className="form-label">Total Amount (₹) *</label>
-                    <input type="number" className="form-control" value={formData.total_amount} onChange={(e) => setFormData({...formData, total_amount: e.target.value})} placeholder="500000" required />
+                    <label className="form-label">Chit Value (₹) * <span className="text-gray-400 text-xs">(कुल राशि)</span></label>
+                    <input type="number" className="form-control" value={formData.chit_value} onChange={(e) => setFormData({...formData, chit_value: e.target.value})} placeholder="1000000" required />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Monthly Installment (₹) *</label>
-                    <input type="number" className="form-control" value={formData.monthly_installment} onChange={(e) => setFormData({...formData, monthly_installment: e.target.value})} placeholder="25000" required />
+                    <label className="form-label">Monthly EMI (₹) * <span className="text-gray-400 text-xs">(मासिक किस्त)</span></label>
+                    <input type="number" className="form-control" value={formData.monthly_installment} onChange={(e) => setFormData({...formData, monthly_installment: e.target.value})} placeholder="50000" required />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="form-group">
-                    <label className="form-label">Total Members *</label>
+                    <label className="form-label">Total Members * <span className="text-gray-400 text-xs">(कुल सदस्य)</span></label>
                     <input type="number" className="form-control" value={formData.total_members} onChange={(e) => setFormData({...formData, total_members: e.target.value})} placeholder="20" required />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Duration (Months) *</label>
+                    <label className="form-label">Duration (Months) * <span className="text-gray-400 text-xs">(अवधि)</span></label>
                     <input type="number" className="form-control" value={formData.duration_months} onChange={(e) => setFormData({...formData, duration_months: e.target.value})} placeholder="20" required />
                   </div>
                 </div>
@@ -318,13 +343,9 @@ const ChitFund = () => {
                     <input type="date" className="form-control" value={formData.start_date} onChange={(e) => setFormData({...formData, start_date: e.target.value})} required />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Organizer</label>
-                    <input type="text" className="form-control" value={formData.organizer} onChange={(e) => setFormData({...formData, organizer: e.target.value})} placeholder="Company name" />
+                    <label className="form-label">Organizer (Company)</label>
+                    <input type="text" className="form-control" value={formData.organizer} onChange={(e) => setFormData({...formData, organizer: e.target.value})} placeholder="Chit company name" />
                   </div>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Note</label>
-                  <input type="text" className="form-control" value={formData.note} onChange={(e) => setFormData({...formData, note: e.target.value})} placeholder="Additional notes" />
                 </div>
               </div>
               <div className="modal-footer">
@@ -336,143 +357,246 @@ const ChitFund = () => {
         </div>
       )}
 
-      {/* Pay Installment Modal */}
-      {showPayModal && selectedChit && (
-        <div className="modal-overlay" onClick={() => setShowPayModal(false)}>
+      {/* Add Monthly Entry Modal */}
+      {showEntryModal && selectedChit && (
+        <div className="modal-overlay" onClick={() => setShowEntryModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div className="modal-title">Pay Installment - {selectedChit.name}</div>
-              <button className="modal-close" onClick={() => setShowPayModal(false)}>&times;</button>
+            <div className="modal-header bg-gradient-to-r from-purple-500 to-pink-500 text-white">
+              <div className="modal-title text-white">Monthly Entry - {selectedChit.name}</div>
+              <button className="modal-close text-white" onClick={() => setShowEntryModal(false)}>&times;</button>
             </div>
-            <form onSubmit={handlePay}>
+            <form onSubmit={handleAddEntry}>
               <div className="modal-body">
                 <div className="bg-purple-50 p-3 rounded-lg mb-4">
-                  <div className="text-sm text-purple-700">Monthly: ₹{selectedChit.monthly_installment.toLocaleString('en-IN')} | Paid: {selectedChit.payments_count}/{selectedChit.duration_months}</div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="form-group">
-                    <label className="form-label">Month Number *</label>
-                    <input type="number" className="form-control" value={payData.month_number} onChange={(e) => setPayData({...payData, month_number: parseInt(e.target.value)})} min="1" max={selectedChit.duration_months} required />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Amount (₹) *</label>
-                    <input type="number" className="form-control" value={payData.amount} onChange={(e) => setPayData({...payData, amount: e.target.value})} required />
+                  <div className="text-sm text-purple-700">
+                    <strong>Chit Value:</strong> ₹{selectedChit.chit_value?.toLocaleString('en-IN')} | 
+                    <strong> Monthly EMI:</strong> ₹{selectedChit.monthly_installment?.toLocaleString('en-IN')} | 
+                    <strong> Members:</strong> {selectedChit.total_members}
                   </div>
                 </div>
+                
                 <div className="grid grid-cols-2 gap-4">
+                  <div className="form-group">
+                    <label className="form-label">Month Number * <span className="text-gray-400 text-xs">(महीना नंबर)</span></label>
+                    <input type="number" className="form-control" value={entryData.month_number} onChange={(e) => setEntryData({...entryData, month_number: parseInt(e.target.value)})} min="1" max={selectedChit.duration_months} required />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">EMI Paid (₹) * <span className="text-gray-400 text-xs">(भुगतान)</span></label>
+                    <input type="number" className="form-control" value={entryData.paid_amount} onChange={(e) => setEntryData({...entryData, paid_amount: e.target.value})} required />
+                  </div>
+                </div>
+                
+                <div className="form-group">
+                  <label className="form-label">Auction Amount (₹) * <span className="text-gray-400 text-xs">(इस महीने नीलामी में कितने में गया?)</span></label>
+                  <input type="number" className="form-control text-lg font-bold" value={entryData.auction_amount} onChange={(e) => setEntryData({...entryData, auction_amount: e.target.value})} placeholder="e.g., 750000" required />
+                </div>
+
+                {/* Live Dividend Calculation */}
+                {entryData.auction_amount && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 mt-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-green-700 font-medium">This Month's Dividend (लाभांश):</span>
+                      <span className="text-2xl font-bold text-green-600">
+                        ₹{calculateExpectedDividend().toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                    <div className="text-xs text-green-600 mt-1">
+                      Formula: (Chit Value - Auction Amount) ÷ Members = ({selectedChit.chit_value?.toLocaleString('en-IN')} - {parseFloat(entryData.auction_amount).toLocaleString('en-IN')}) ÷ {selectedChit.total_members}
+                    </div>
+                  </div>
+                )}
+                
+                <div className="grid grid-cols-2 gap-4 mt-4">
                   <div className="form-group">
                     <label className="form-label">Payment Date *</label>
-                    <input type="date" className="form-control" value={payData.payment_date} onChange={(e) => setPayData({...payData, payment_date: e.target.value})} required />
+                    <input type="date" className="form-control" value={entryData.payment_date} onChange={(e) => setEntryData({...entryData, payment_date: e.target.value})} required />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Payment Mode *</label>
-                    <select className="form-control" value={payData.payment_mode} onChange={(e) => setPayData({...payData, payment_mode: e.target.value})}>
+                    <select className="form-control" value={entryData.payment_mode} onChange={(e) => setEntryData({...entryData, payment_mode: e.target.value})}>
                       <option value="cash">Cash</option>
                       <option value="upi">UPI</option>
                       <option value="bank_transfer">Bank Transfer</option>
                     </select>
                   </div>
                 </div>
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700">
-                  This payment will be automatically added to Cash Book as a Debit entry.
+                
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700 mt-4">
+                  EMI automatically Cash Book me Debit hogi.
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" onClick={() => setShowPayModal(false)} className="btn btn-secondary">Cancel</button>
-                <button type="submit" className="btn btn-success">Pay ₹{payData.amount}</button>
+                <button type="button" onClick={() => setShowEntryModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-success">Add Entry</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* Mark Won Modal */}
-      {showWinModal && selectedChit && (
-        <div className="modal-overlay" onClick={() => setShowWinModal(false)}>
+      {/* Lift Chit Modal */}
+      {showLiftModal && selectedChit && (
+        <div className="modal-overlay" onClick={() => setShowLiftModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header bg-gradient-to-r from-green-500 to-emerald-500 text-white">
-              <div className="modal-title text-white">Chit Won! - {selectedChit.name}</div>
-              <button className="modal-close text-white" onClick={() => setShowWinModal(false)}>&times;</button>
+            <div className="modal-header bg-gradient-to-r from-yellow-500 to-orange-500 text-white">
+              <div className="modal-title text-white">Chit Uthao (Lift) - {selectedChit.name}</div>
+              <button className="modal-close text-white" onClick={() => setShowLiftModal(false)}>&times;</button>
             </div>
-            <form onSubmit={handleWin}>
+            <form onSubmit={handleLift}>
               <div className="modal-body">
                 <div className="text-center py-4">
-                  <div className="text-5xl mb-2">🎉</div>
-                  <div className="text-lg font-bold text-green-600">Congratulations!</div>
+                  <div className="text-5xl mb-2">🎯</div>
+                  <div className="text-lg font-bold text-orange-600">Chit Lift Karo!</div>
+                  <p className="text-sm text-gray-500">Jis month me aapne uthaya, wo amount enter karo</p>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="form-group">
-                    <label className="form-label">Won in Month *</label>
-                    <input type="number" className="form-control" value={winData.won_month} onChange={(e) => setWinData({...winData, won_month: parseInt(e.target.value)})} min="1" required />
+                    <label className="form-label">Lifted in Month * <span className="text-gray-400 text-xs">(कौन से महीने)</span></label>
+                    <input type="number" className="form-control" value={liftData.lifted_month} onChange={(e) => setLiftData({...liftData, lifted_month: parseInt(e.target.value)})} min="1" required />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Amount Received (₹) *</label>
-                    <input type="number" className="form-control" value={winData.won_amount} onChange={(e) => setWinData({...winData, won_amount: e.target.value})} required />
+                    <label className="form-label">Amount Received (₹) * <span className="text-gray-400 text-xs">(कितना मिला)</span></label>
+                    <input type="number" className="form-control" value={liftData.lifted_amount} onChange={(e) => setLiftData({...liftData, lifted_amount: e.target.value})} required />
                   </div>
                 </div>
                 <div className="form-group">
                   <label className="form-label">Payment Mode *</label>
-                  <select className="form-control" value={winData.payment_mode} onChange={(e) => setWinData({...winData, payment_mode: e.target.value})}>
+                  <select className="form-control" value={liftData.payment_mode} onChange={(e) => setLiftData({...liftData, payment_mode: e.target.value})}>
                     <option value="bank_transfer">Bank Transfer</option>
                     <option value="cash">Cash</option>
                     <option value="upi">UPI</option>
                   </select>
                 </div>
                 <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-700">
-                  The won amount will be automatically added to Cash Book as a Credit entry.
+                  Ye amount Cash Book me Credit ho jayega.
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" onClick={() => setShowWinModal(false)} className="btn btn-secondary">Cancel</button>
-                <button type="submit" className="btn btn-success">Confirm Win</button>
+                <button type="button" onClick={() => setShowLiftModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-warning">Confirm Lift</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* View Payments Modal */}
-      {showPaymentsModal && selectedChit && (
-        <div className="modal-overlay" onClick={() => setShowPaymentsModal(false)}>
-          <div className="modal-content modal-lg" onClick={(e) => e.stopPropagation()} style={{maxWidth: '700px'}}>
+      {/* Chit Detail Modal with Full Summary */}
+      {showDetailModal && chitDetail && (
+        <div className="modal-overlay" onClick={() => setShowDetailModal(false)}>
+          <div className="modal-content modal-lg" onClick={(e) => e.stopPropagation()} style={{maxWidth: '900px'}}>
             <div className="modal-header">
-              <div className="modal-title">Payment History - {selectedChit.name}</div>
-              <button className="modal-close" onClick={() => setShowPaymentsModal(false)}>&times;</button>
+              <div className="modal-title">{chitDetail.chit?.name} - Full Summary</div>
+              <button className="modal-close" onClick={() => setShowDetailModal(false)}>&times;</button>
             </div>
             <div className="modal-body p-0">
-              {payments.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">No payments yet</div>
-              ) : (
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Month</th>
-                      <th>Date</th>
-                      <th>Amount</th>
-                      <th>Mode</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {payments.map((p) => (
-                      <tr key={p.id}>
-                        <td className="font-medium">Month {p.month_number}</td>
-                        <td>{format(new Date(p.payment_date), "dd-MM-yyyy")}</td>
-                        <td className="font-bold text-red-600">₹{p.amount.toLocaleString('en-IN')}</td>
-                        <td>
-                          <span className={`px-2 py-1 rounded text-xs ${p.payment_mode === 'cash' ? 'bg-green-100 text-green-700' : p.payment_mode === 'upi' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                            {p.payment_mode === 'bank_transfer' ? 'Bank' : p.payment_mode.toUpperCase()}
-                          </span>
-                        </td>
-                        <td>
-                          <button onClick={() => handleDeletePayment(p.id)} className="text-red-500 hover:text-red-700">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              {/* Summary Stats */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-gray-50">
+                <div className="text-center p-3 bg-white rounded-lg shadow-sm">
+                  <div className="text-xs text-gray-500">Total Paid (भुगतान)</div>
+                  <div className="text-lg font-bold text-red-600">₹{chitDetail.summary?.total_paid?.toLocaleString('en-IN')}</div>
+                </div>
+                <div className="text-center p-3 bg-white rounded-lg shadow-sm">
+                  <div className="text-xs text-gray-500">Total Dividend (लाभांश)</div>
+                  <div className="text-lg font-bold text-green-600">₹{chitDetail.summary?.total_dividend?.toLocaleString('en-IN')}</div>
+                </div>
+                <div className="text-center p-3 bg-white rounded-lg shadow-sm">
+                  <div className="text-xs text-gray-500">Lifted Amount (उठाया)</div>
+                  <div className="text-lg font-bold text-blue-600">
+                    {chitDetail.summary?.is_lifted ? `₹${chitDetail.summary?.lifted_amount?.toLocaleString('en-IN')}` : 'Not Yet'}
+                  </div>
+                </div>
+                <div className="text-center p-3 bg-white rounded-lg shadow-sm">
+                  <div className="text-xs text-gray-500">Net Profit (शुद्ध लाभ)</div>
+                  <div className={`text-xl font-bold ${chitDetail.summary?.is_profit ? 'text-green-600' : 'text-red-600'}`}>
+                    {chitDetail.summary?.is_profit ? '+' : ''}₹{chitDetail.summary?.net_profit?.toLocaleString('en-IN')}
+                  </div>
+                </div>
+              </div>
+
+              {/* Remaining Info */}
+              {chitDetail.summary?.remaining_months > 0 && (
+                <div className="p-4 bg-yellow-50 border-b">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-yellow-700">Remaining: {chitDetail.summary?.remaining_months} months</span>
+                    <span className="font-bold text-yellow-700">₹{chitDetail.summary?.remaining_amount?.toLocaleString('en-IN')} more to pay</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Monthly Entries Table */}
+              <div className="p-4">
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="font-bold text-gray-700">Monthly Entries (महीनावार विवरण)</h3>
+                  <button onClick={() => openEntryModal(selectedChit)} className="action-btn success text-xs">+ Add Entry</button>
+                </div>
+                
+                {chitDetail.entries?.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">No entries yet. Add your first monthly entry!</div>
+                ) : (
+                  <div className="overflow-auto max-h-72">
+                    <table className="data-table">
+                      <thead className="sticky top-0 bg-white">
+                        <tr>
+                          <th>Month</th>
+                          <th>Date</th>
+                          <th className="text-right">EMI Paid</th>
+                          <th className="text-right">Auction</th>
+                          <th className="text-right text-green-600">Dividend</th>
+                          <th className="text-right">Net Cost</th>
+                          <th>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {chitDetail.entries.map((entry, idx) => {
+                          const netCost = entry.paid_amount - entry.dividend;
+                          return (
+                            <tr key={entry.id || idx}>
+                              <td className="font-bold">{entry.month_number}</td>
+                              <td>{format(new Date(entry.payment_date), "dd-MM-yyyy")}</td>
+                              <td className="text-right text-red-600 font-medium">₹{entry.paid_amount?.toLocaleString('en-IN')}</td>
+                              <td className="text-right text-purple-600">₹{entry.auction_amount?.toLocaleString('en-IN')}</td>
+                              <td className="text-right text-green-600 font-bold">₹{entry.dividend?.toLocaleString('en-IN')}</td>
+                              <td className="text-right font-medium">₹{netCost?.toLocaleString('en-IN')}</td>
+                              <td>
+                                <button onClick={() => handleDeleteEntry(entry.id)} className="text-red-500 hover:text-red-700">
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot className="bg-gray-50 font-bold">
+                        <tr>
+                          <td colSpan="2">Total</td>
+                          <td className="text-right text-red-600">₹{chitDetail.summary?.total_paid?.toLocaleString('en-IN')}</td>
+                          <td></td>
+                          <td className="text-right text-green-600">₹{chitDetail.summary?.total_dividend?.toLocaleString('en-IN')}</td>
+                          <td className="text-right">₹{(chitDetail.summary?.total_paid - chitDetail.summary?.total_dividend)?.toLocaleString('en-IN')}</td>
+                          <td></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Final Summary Box */}
+              {chitDetail.summary?.is_lifted && (
+                <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 border-t">
+                  <div className="text-center">
+                    <div className="text-sm text-green-600 mb-1">Chit Completed - Final Calculation</div>
+                    <div className="text-lg font-bold">
+                      Total Received (Lift + Dividend) = ₹{(chitDetail.summary?.lifted_amount + chitDetail.summary?.total_dividend)?.toLocaleString('en-IN')}
+                    </div>
+                    <div className="text-lg">
+                      Total Paid = ₹{chitDetail.summary?.total_paid?.toLocaleString('en-IN')}
+                    </div>
+                    <div className={`text-2xl font-bold mt-2 ${chitDetail.summary?.is_profit ? 'text-green-600' : 'text-red-600'}`}>
+                      Net {chitDetail.summary?.is_profit ? 'Profit' : 'Loss'}: ₹{Math.abs(chitDetail.summary?.net_profit)?.toLocaleString('en-IN')}
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
           </div>
