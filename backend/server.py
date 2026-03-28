@@ -4,6 +4,7 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import hashlib
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional
@@ -24,6 +25,79 @@ app = FastAPI()
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
+
+# ==================== AUTH MODELS ====================
+class PasswordLogin(BaseModel):
+    password: str
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+
+class AppSettings(BaseModel):
+    auto_refresh: bool = False
+    refresh_interval: int = 30  # seconds
+
+# ==================== AUTH APIs ====================
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode()).hexdigest()
+
+@api_router.post("/auth/login")
+async def login(data: PasswordLogin):
+    """Login with password only"""
+    settings = await db.app_settings.find_one({"key": "app_password"}, {"_id": 0})
+    
+    # Default password is "1234" if not set
+    if not settings:
+        default_hash = hash_password("1234")
+        await db.app_settings.insert_one({"key": "app_password", "value": default_hash})
+        settings = {"value": default_hash}
+    
+    if hash_password(data.password) == settings["value"]:
+        return {"success": True, "message": "Login successful"}
+    else:
+        raise HTTPException(status_code=401, detail="Wrong password")
+
+@api_router.post("/auth/change-password")
+async def change_password(data: PasswordChange):
+    """Change app password"""
+    settings = await db.app_settings.find_one({"key": "app_password"}, {"_id": 0})
+    
+    # Check current password
+    current_hash = hash_password(data.current_password)
+    stored_hash = settings["value"] if settings else hash_password("1234")
+    
+    if current_hash != stored_hash:
+        raise HTTPException(status_code=401, detail="Current password is wrong")
+    
+    # Update password
+    new_hash = hash_password(data.new_password)
+    await db.app_settings.update_one(
+        {"key": "app_password"},
+        {"$set": {"value": new_hash}},
+        upsert=True
+    )
+    
+    return {"success": True, "message": "Password changed successfully"}
+
+@api_router.get("/settings/auto-refresh")
+async def get_auto_refresh():
+    """Get auto-refresh settings"""
+    settings = await db.app_settings.find_one({"key": "auto_refresh"}, {"_id": 0})
+    return {
+        "enabled": settings.get("enabled", False) if settings else False,
+        "interval": settings.get("interval", 30) if settings else 30
+    }
+
+@api_router.post("/settings/auto-refresh")
+async def set_auto_refresh(enabled: bool, interval: int = 30):
+    """Set auto-refresh settings"""
+    await db.app_settings.update_one(
+        {"key": "auto_refresh"},
+        {"$set": {"key": "auto_refresh", "enabled": enabled, "interval": interval}},
+        upsert=True
+    )
+    return {"success": True, "enabled": enabled, "interval": interval}
 
 # Enums
 class AttendanceStatus(str, Enum):
