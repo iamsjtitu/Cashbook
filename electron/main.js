@@ -32,11 +32,30 @@ function createWindow() {
     show: false
   });
 
-  if (process.env.NODE_ENV === 'development') {
+  // Always load local build in packaged app, dev server only when explicitly set
+  const isDev = !app.isPackaged;
+  
+  if (isDev) {
     mainWindow.loadURL('http://localhost:3000');
     mainWindow.webContents.openDevTools();
   } else {
-    mainWindow.loadFile(path.join(__dirname, 'build', 'index.html'));
+    // Production: load local build from resources
+    let indexPath;
+    if (process.resourcesPath) {
+      indexPath = path.join(process.resourcesPath, 'build', 'index.html');
+    } else {
+      indexPath = path.join(__dirname, 'build', 'index.html');
+    }
+    
+    console.log('Loading:', indexPath);
+    mainWindow.loadFile(indexPath).catch(err => {
+      console.error('Failed to load index.html:', err);
+      // Try alternate path
+      const altPath = path.join(__dirname, 'build', 'index.html');
+      mainWindow.loadFile(altPath).catch(err2 => {
+        mainWindow.loadURL(`data:text/html,<h1>Error loading app</h1><p>${err.message}</p><p>Tried: ${indexPath}</p><p>Alt: ${altPath}</p>`);
+      });
+    });
   }
 
   mainWindow.once('ready-to-show', () => {
