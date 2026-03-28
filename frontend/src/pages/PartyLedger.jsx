@@ -39,6 +39,7 @@ const PartyLedger = () => {
     parent_party_id: ""
   });
   const [filterHead, setFilterHead] = useState("all");
+  const [activeTab, setActiveTab] = useState("ledger"); // "ledger" or "parent"
 
   useEffect(() => { fetchParties(); }, []);
 
@@ -111,16 +112,29 @@ const PartyLedger = () => {
     }
   };
 
-  // Get parent parties (ones with account_head set)
-  const parentParties = parties.filter(p => p.account_head);
+  // Get parent parties (ones with account_head set AND have sub-ledgers)
+  const parentPartiesWithChildren = parties.filter(p => 
+    parties.some(sub => sub.parent_party_id === p.id)
+  );
   
-  // Filter parties by account head
-  const filteredParties = filterHead === "all" 
-    ? parties 
-    : parties.filter(p => p.account_head === filterHead || p.parent_party_id && parentParties.find(pp => pp.id === p.parent_party_id && pp.account_head === filterHead));
+  // Get leaf parties (no sub-ledgers under them)
+  const leafParties = parties.filter(p => 
+    !parties.some(sub => sub.parent_party_id === p.id)
+  );
+  
+  // Filter based on active tab
+  let displayParties = activeTab === "parent" ? parentPartiesWithChildren : leafParties;
+  
+  // Then apply account head filter
+  if (filterHead !== "all") {
+    displayParties = displayParties.filter(p => 
+      p.account_head === filterHead || 
+      (p.parent_party_id && parties.find(pp => pp.id === p.parent_party_id)?.account_head === filterHead)
+    );
+  }
 
-  const totalDebit = filteredParties.reduce((sum, p) => sum + (p.current_balance > 0 ? p.current_balance : 0), 0);
-  const totalCredit = filteredParties.reduce((sum, p) => sum + (p.current_balance < 0 ? Math.abs(p.current_balance) : 0), 0);
+  const totalDebit = displayParties.reduce((sum, p) => sum + (p.current_balance > 0 ? p.current_balance : 0), 0);
+  const totalCredit = displayParties.reduce((sum, p) => sum + (p.current_balance < 0 ? Math.abs(p.current_balance) : 0), 0);
 
   const getAccountHeadLabel = (value) => {
     const all = [...ACCOUNT_HEAD_OPTIONS.balance_sheet, ...ACCOUNT_HEAD_OPTIONS.profit_loss];
@@ -152,6 +166,24 @@ const PartyLedger = () => {
           Add Ledger
         </button>
         
+        {/* Tabs: Ledger Master / Parent Ledger */}
+        <div className="flex bg-gray-100 rounded-lg p-1">
+          <button
+            onClick={() => setActiveTab("ledger")}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition ${activeTab === 'ledger' ? 'bg-white shadow text-orange-600' : 'text-gray-600'}`}
+            data-testid="tab-ledger"
+          >
+            Ledger Master ({leafParties.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("parent")}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition ${activeTab === 'parent' ? 'bg-white shadow text-blue-600' : 'text-gray-600'}`}
+            data-testid="tab-parent"
+          >
+            Parent Ledger ({parentPartiesWithChildren.length})
+          </button>
+        </div>
+        
         {/* Filter by Account Head */}
         <select 
           className="form-control w-auto" 
@@ -175,8 +207,8 @@ const PartyLedger = () => {
       {/* Stats */}
       <div className="stats-row">
         <div className="stat-box">
-          <div className="stat-box-label">Total Ledgers</div>
-          <div className="stat-box-value primary">{filteredParties.length}</div>
+          <div className="stat-box-label">{activeTab === "parent" ? "Parent Ledgers" : "Total Ledgers"}</div>
+          <div className="stat-box-value primary">{displayParties.length}</div>
         </div>
         <div className="stat-box">
           <div className="stat-box-label">Debit Balance (Lena)</div>
@@ -197,13 +229,13 @@ const PartyLedger = () => {
       {/* Party Table */}
       <div className="data-card">
         <div className="data-card-header">
-          <div className="data-card-title">Ledger Master</div>
+          <div className="data-card-title">{activeTab === "parent" ? "Parent Ledger" : "Ledger Master"}</div>
         </div>
         <div className="data-card-body p-0">
-          {filteredParties.length === 0 ? (
+          {displayParties.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
-              <p>No ledgers found</p>
-              <button onClick={() => setShowModal(true)} className="btn btn-primary mt-3">Add First Ledger</button>
+              <p>{activeTab === "parent" ? "No parent ledgers found" : "No ledgers found"}</p>
+              {activeTab === "ledger" && <button onClick={() => setShowModal(true)} className="btn btn-primary mt-3">Add First Ledger</button>}
             </div>
           ) : (
             <table className="data-table">
@@ -211,14 +243,14 @@ const PartyLedger = () => {
                 <tr>
                   <th>NAME</th>
                   <th>ACCOUNT HEAD</th>
-                  <th>PARENT</th>
+                  <th>{activeTab === "parent" ? "SUB-LEDGERS" : "PARENT"}</th>
                   <th>OPENING BAL</th>
                   <th>CURRENT BAL</th>
                   <th>ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredParties.map((party) => {
+                {displayParties.map((party) => {
                   const subCount = getSubLedgerCount(party.id);
                   const isParent = subCount > 0;
                   return (
@@ -255,9 +287,15 @@ const PartyLedger = () => {
                       )}
                     </td>
                     <td>
-                      {party.parent_party_id ? (
-                        <span className="text-sm text-blue-600">{getParentName(party.parent_party_id)}</span>
-                      ) : '-'}
+                      {activeTab === "parent" ? (
+                        <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded">
+                          {subCount} Sub-ledgers
+                        </span>
+                      ) : (
+                        party.parent_party_id ? (
+                          <span className="text-sm text-blue-600">{getParentName(party.parent_party_id)}</span>
+                        ) : '-'
+                      )}
                     </td>
                     <td className="font-medium">
                       ₹{(party.opening_balance || 0).toLocaleString('en-IN')}
@@ -332,7 +370,11 @@ const PartyLedger = () => {
                     onChange={(e) => setFormData({...formData, parent_party_id: e.target.value})}
                   >
                     <option value="">-- No Parent (Independent) --</option>
-                    {parentParties.map(p => (
+                    {parentPartiesWithChildren.map(p => (
+                      <option key={p.id} value={p.id}>{p.name} ({getAccountHeadLabel(p.account_head)})</option>
+                    ))}
+                    {/* Also show parties with account_head that can be parents */}
+                    {parties.filter(p => p.account_head && !parentPartiesWithChildren.find(pp => pp.id === p.id)).map(p => (
                       <option key={p.id} value={p.id}>{p.name} ({getAccountHeadLabel(p.account_head)})</option>
                     ))}
                   </select>

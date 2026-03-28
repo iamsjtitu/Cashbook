@@ -12,6 +12,8 @@ const CashBook = () => {
   const [dateRange, setDateRange] = useState("today"); // today, week, month, all
   const [transactions, setTransactions] = useState([]);
   const [parties, setParties] = useState([]);
+  const [allParties, setAllParties] = useState([]); // For filter dropdown (includes parents)
+  const [filterPartyId, setFilterPartyId] = useState(""); // Party filter
   const [summary, setSummary] = useState({ opening: 0, credit: 0, debit: 0, closing: 0 });
   const [loading, setLoading] = useState(true);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
@@ -44,37 +46,57 @@ const CashBook = () => {
     { value: "other", label: "Other (अन्य)" }
   ];
 
-  useEffect(() => { fetchData(); }, [selectedDate, dateRange]);
+  useEffect(() => { fetchData(); }, [selectedDate, dateRange, filterPartyId]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Fetch leaf parties (parties without sub-ledgers) for transaction entry
-      const partiesRes = await axios.get(`${API}/parties/leaf`);
-      setParties(partiesRes.data);
+      // Fetch leaf parties (for entry form) and all parties (for filter)
+      const [leafRes, allRes] = await Promise.all([
+        axios.get(`${API}/parties/leaf`),
+        axios.get(`${API}/parties`)
+      ]);
+      setParties(leafRes.data);
+      setAllParties(allRes.data);
       
       // Fetch transactions based on date range
       let txnRes;
       if (dateRange === "today") {
         txnRes = await axios.get(`${API}/cashbook/${selectedDate}`);
-        setTransactions(txnRes.data.transactions || []);
+        let todayTxns = txnRes.data.transactions || [];
+        
+        // Apply party filter if selected
+        if (filterPartyId) {
+          todayTxns = todayTxns.filter(t => t.party_id === filterPartyId);
+        }
+        
+        setTransactions(todayTxns);
+        
+        // Recalculate summary based on filtered transactions
+        const credit = todayTxns.filter(t => t.transaction_type === "credit").reduce((s, t) => s + t.amount, 0);
+        const debit = todayTxns.filter(t => t.transaction_type === "debit").reduce((s, t) => s + t.amount, 0);
         setSummary({
           opening: txnRes.data.opening_balance || 0,
-          credit: txnRes.data.total_credit || 0,
-          debit: txnRes.data.total_debit || 0,
-          closing: txnRes.data.closing_balance || 0
+          credit,
+          debit,
+          closing: (txnRes.data.opening_balance || 0) + credit - debit
         });
       } else {
         // For week/month/all, fetch from monthly API or all transactions
         const month = format(new Date(selectedDate), "yyyy-MM");
         txnRes = await axios.get(`${API}/cashbook/monthly/${month}`);
-        const allTxns = txnRes.data.transactions || [];
+        let allTxns = txnRes.data.transactions || [];
         
         // Filter based on range
         let filtered = allTxns;
         if (dateRange === "week") {
           const weekAgo = format(subDays(new Date(), 7), "yyyy-MM-dd");
           filtered = allTxns.filter(t => t.date >= weekAgo);
+        }
+        
+        // Apply party filter if selected
+        if (filterPartyId) {
+          filtered = filtered.filter(t => t.party_id === filterPartyId);
         }
         
         setTransactions(filtered);
@@ -346,7 +368,20 @@ const CashBook = () => {
           <div className="data-card">
             <div className="data-card-header">
               <div className="data-card-title">Transactions (लेन-देन)</div>
-              <div className="flex gap-2 items-center">
+              <div className="flex gap-2 items-center flex-wrap">
+                {/* Party Filter */}
+                <select 
+                  className="form-control w-auto text-sm py-1"
+                  value={filterPartyId}
+                  onChange={(e) => setFilterPartyId(e.target.value)}
+                  data-testid="party-filter"
+                >
+                  <option value="">All Parties</option>
+                  {allParties.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+
                 {/* Date Range Filter */}
                 <div className="flex bg-gray-100 rounded-lg p-1">
                   {[
