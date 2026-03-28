@@ -1,0 +1,60 @@
+{
+  "summary": "Iteration 17: Tested new features - Party/Ledger Master (search, date filters, Excel/PDF export) and Chit Fund (Opening installments, profit calculation, Edit Opening). Found and fixed PDF export bug (doc.autoTable is not a function). All features now working correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "features_tested": {
+    "party_ledger_search": {
+      "search_input": "WORKING - data-testid='search-input' present, filters ledgers by name",
+      "date_filters": "WORKING - From and To date inputs present with Clear button",
+      "excel_export": "WORKING - data-testid='export-excel', downloads Ledger_Master_YYYY-MM-DD.xlsx",
+      "pdf_export": "FIXED - data-testid='export-pdf', downloads Ledger_Master_YYYY-MM-DD.pdf (was broken due to jspdf-autotable import issue)"
+    },
+    "chit_fund_opening": {
+      "opening_stat_box": "WORKING - Shows 'Opening (पहले से)' with installments and amount (16 Inst. ₹7,00,000)",
+      "total_installments_done": "WORKING - Shows '16 / 20' with progress bar",
+      "expected_pay": "WORKING - Shows 'Expected Pay (Installment × EMI)' = ₹8,00,000 (16 × 50000)",
+      "profit_so_far": "WORKING - Shows 'Profit So Far (अभी तक का लाभ)' = ₹1,00,000 (8L - 7L)",
+      "edit_opening_button": "WORKING - Opens modal with Installments Already Paid and Total Amount Paid inputs",
+      "edit_opening_modal": "WORKING - Shows preview calculation with Expected, Actual Paid, and Profit So Far"
+    },
+    "profit_calculation_verification": {
+      "formula": "Profit = Expected Pay (Installments × EMI) - Actual Paid + Dividends",
+      "test_case": "opening_installments_paid=16, opening_amount_paid=700000, monthly_installment=50000",
+      "expected_profit": "₹1,00,000 (16 × 50000 - 700000 = 100000)",
+      "result": "VERIFIED - Profit calculation is correct"
+    }
+  },
+  "bug_fixed": {
+    "issue": "PDF export failing with 'TypeError: doc.autoTable is not a function'",
+    "root_cause": "jspdf-autotable side-effect import 'import jspdf-autotable' doesn't work reliably in React due to tree-shaking",
+    "fix_applied": "Changed import to use applyPlugin method: import { applyPlugin } from 'jspdf-autotable'; applyPlugin(jsPDF);",
+    "file_modified": "/app/frontend/src/pages/PartyLedger.jsx"
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_new_features.py",
+    "/app/test_reports/pytest/new_features_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/frontend/src/pages/PartyLedger.jsx"
+  ],
+  "success_rate": {
+    "backend": "100% (10/10 tests passed)",
+    "frontend": "100% (All features working after fix)"
+  },
+  "test_credentials": {
+    "password": "1234"
+  },
+  "seed_data_creation": "Test Chit Fund with opening_installments_paid=16, opening_amount_paid=700000 already exists",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Party Ledger page has search input, date filters (From/To with Clear), Excel and PDF export buttons. Chit Fund page shows Opening balance, Total Installments Done, Expected Pay, Profit So Far, and Edit Opening button. Profit calculation formula: Expected (Installments × EMI) - Actual Paid + Dividends."
+}

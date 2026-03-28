@@ -2,7 +2,14 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import { API } from "@/App";
 import { toast } from "sonner";
-import { format } from "date-fns";
+import { format, subMonths } from "date-fns";
+import { exportStaffListPDF, exportStaffListExcel } from "@/utils/exportUtils";
+import jsPDF from 'jspdf';
+import { applyPlugin } from 'jspdf-autotable';
+
+// Apply jspdf-autotable plugin to jsPDF
+applyPlugin(jsPDF);
+import * as XLSX from 'xlsx';
 
 const ACCOUNT_HEAD_OPTIONS = {
   balance_sheet: [
@@ -40,6 +47,9 @@ const PartyLedger = () => {
   });
   const [filterHead, setFilterHead] = useState("all");
   const [activeTab, setActiveTab] = useState("ledger"); // "ledger" or "parent"
+  const [searchQuery, setSearchQuery] = useState(""); // Name search
+  const [dateFrom, setDateFrom] = useState(""); // Date filter from
+  const [dateTo, setDateTo] = useState(format(new Date(), "yyyy-MM-dd")); // Date filter to
 
   useEffect(() => { fetchParties(); }, []);
 
@@ -125,6 +135,13 @@ const PartyLedger = () => {
   // Filter based on active tab
   let displayParties = activeTab === "parent" ? parentPartiesWithChildren : leafParties;
   
+  // Apply name search filter
+  if (searchQuery.trim()) {
+    displayParties = displayParties.filter(p => 
+      p.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }
+  
   // Then apply account head filter
   if (filterHead !== "all") {
     displayParties = displayParties.filter(p => 
@@ -149,6 +166,57 @@ const PartyLedger = () => {
   // Get count of sub-ledgers for a party
   const getSubLedgerCount = (partyId) => {
     return parties.filter(p => p.parent_party_id === partyId).length;
+  };
+
+  // Export to PDF
+  const exportPDF = () => {
+    const doc = new jsPDF();
+    doc.setFontSize(20);
+    doc.setTextColor(255, 107, 53);
+    doc.text('STAFF MANAGER', 105, 15, { align: 'center' });
+    doc.setFontSize(14);
+    doc.setTextColor(50);
+    doc.text(activeTab === "parent" ? "Parent Ledger Report" : "Ledger Master Report", 105, 24, { align: 'center' });
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Generated: ${format(new Date(), 'dd-MM-yyyy HH:mm')}`, 105, 31, { align: 'center' });
+    
+    const tableData = displayParties.map(p => [
+      p.name,
+      p.account_head ? getAccountHeadLabel(p.account_head) : '-',
+      activeTab === "parent" ? `${getSubLedgerCount(p.id)} Sub-ledgers` : (p.parent_party_id ? getParentName(p.parent_party_id) : '-'),
+      `Rs. ${(p.opening_balance || 0).toLocaleString('en-IN')}`,
+      `Rs. ${Math.abs(p.current_balance || 0).toLocaleString('en-IN')} ${p.current_balance >= 0 ? '(DR)' : '(CR)'}`
+    ]);
+    
+    doc.autoTable({
+      startY: 38,
+      head: [['Name', 'Account Head', activeTab === "parent" ? 'Sub-Ledgers' : 'Parent', 'Opening Bal', 'Current Bal']],
+      body: tableData,
+      theme: 'striped',
+      headStyles: { fillColor: [255, 107, 53] }
+    });
+    
+    doc.save(`${activeTab === "parent" ? "Parent_Ledger" : "Ledger_Master"}_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+    toast.success("PDF Downloaded!");
+  };
+
+  // Export to Excel
+  const exportExcel = () => {
+    const data = displayParties.map(p => ({
+      'Name': p.name,
+      'Account Head': p.account_head ? getAccountHeadLabel(p.account_head) : '-',
+      [activeTab === "parent" ? 'Sub-Ledgers' : 'Parent']: activeTab === "parent" ? `${getSubLedgerCount(p.id)} Sub-ledgers` : (p.parent_party_id ? getParentName(p.parent_party_id) : '-'),
+      'Opening Balance': p.opening_balance || 0,
+      'Current Balance': p.current_balance || 0,
+      'Balance Type': (p.current_balance || 0) >= 0 ? 'Debit' : 'Credit'
+    }));
+    
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, activeTab === "parent" ? 'Parent Ledger' : 'Ledger Master');
+    XLSX.writeFile(wb, `${activeTab === "parent" ? "Parent_Ledger" : "Ledger_Master"}_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+    toast.success("Excel Downloaded!");
   };
 
   // Check if party is a parent (has sub-ledgers)
@@ -202,6 +270,52 @@ const PartyLedger = () => {
             ))}
           </optgroup>
         </select>
+        
+        {/* Export Buttons */}
+        <button onClick={exportExcel} className="action-btn outline-primary" data-testid="export-excel">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+          Excel
+        </button>
+        <button onClick={exportPDF} className="action-btn outline-danger" data-testid="export-pdf">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+          PDF
+        </button>
+      </div>
+
+      {/* Search and Date Filters */}
+      <div className="action-bar">
+        <div className="flex items-center gap-2 flex-1">
+          <input
+            type="text"
+            className="form-control max-w-xs"
+            placeholder="Search by name..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            data-testid="search-input"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-500">From:</span>
+          <input
+            type="date"
+            className="form-control w-auto"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+          />
+          <span className="text-sm text-gray-500">To:</span>
+          <input
+            type="date"
+            className="form-control w-auto"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+          />
+          <button 
+            onClick={() => { setDateFrom(""); setDateTo(format(new Date(), "yyyy-MM-dd")); }}
+            className="btn btn-secondary text-xs"
+          >
+            Clear
+          </button>
+        </div>
       </div>
 
       {/* Stats */}

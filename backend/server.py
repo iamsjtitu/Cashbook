@@ -477,6 +477,9 @@ class ChitFundBase(BaseModel):
     start_date: str  # YYYY-MM-DD
     organizer: Optional[str] = None  # Chit company name
     note: Optional[str] = None
+    # Opening balance - for installments already paid before using this software
+    opening_installments_paid: int = 0  # Kitne installment pehle se paid hain
+    opening_amount_paid: float = 0.0  # Pehle se kitna paisa diya hua hai
 
 class ChitFundCreate(ChitFundBase):
     pass
@@ -489,10 +492,10 @@ class ChitFund(ChitFundBase):
     is_lifted: bool = False  # Did user lift/win this chit?
     lifted_month: Optional[int] = None  # Which month user lifted
     lifted_amount: Optional[float] = None  # Amount received when lifted
-    # Totals (auto-calculated)
-    total_paid: float = 0.0  # Sum of all EMIs paid
+    # Totals (auto-calculated from entries, does NOT include opening)
+    total_paid: float = 0.0  # Sum of all EMIs paid via entries
     total_dividend: float = 0.0  # Sum of all monthly dividends
-    payments_count: int = 0  # Number of months paid
+    payments_count: int = 0  # Number of months paid via entries
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 class ChitFundUpdate(BaseModel):
@@ -500,6 +503,8 @@ class ChitFundUpdate(BaseModel):
     organizer: Optional[str] = None
     note: Optional[str] = None
     is_active: Optional[bool] = None
+    opening_installments_paid: Optional[int] = None
+    opening_amount_paid: Optional[float] = None
 
 # Chit Fund Monthly Entry - Track each month's payment and dividend
 class ChitMonthlyEntryBase(BaseModel):

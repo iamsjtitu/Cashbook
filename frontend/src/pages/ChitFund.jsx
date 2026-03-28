@@ -14,6 +14,7 @@ const ChitFund = () => {
   const [showAddChitModal, setShowAddChitModal] = useState(false);
   const [showEntryModal, setShowEntryModal] = useState(false);
   const [showLiftModal, setShowLiftModal] = useState(false);
+  const [showEditOpeningModal, setShowEditOpeningModal] = useState(false);
   
   const [chitFormData, setChitFormData] = useState({
     name: "",
@@ -22,7 +23,14 @@ const ChitFund = () => {
     total_members: "",
     duration_months: "",
     start_date: format(new Date(), "yyyy-MM-dd"),
-    organizer: ""
+    organizer: "",
+    opening_installments_paid: "",
+    opening_amount_paid: ""
+  });
+  
+  const [openingFormData, setOpeningFormData] = useState({
+    opening_installments_paid: 0,
+    opening_amount_paid: 0
   });
   
   const [entryData, setEntryData] = useState({
@@ -112,6 +120,22 @@ const ChitFund = () => {
       fetchChits();
     } catch (error) {
       toast.error(error.response?.data?.detail || "Entry add nahi hui");
+    }
+  };
+
+  const handleUpdateOpening = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.put(`${API}/chit-funds/${selectedChit.id}`, {
+        opening_installments_paid: parseInt(openingFormData.opening_installments_paid) || 0,
+        opening_amount_paid: parseFloat(openingFormData.opening_amount_paid) || 0
+      });
+      toast.success("Opening balance updated!");
+      setShowEditOpeningModal(false);
+      fetchChitData();
+      fetchChits();
+    } catch (error) {
+      toast.error("Failed to update opening");
     }
   };
 
@@ -260,27 +284,61 @@ const ChitFund = () => {
         </div>
       ) : (
         <>
-          {/* Summary Cards - Like Cash Book */}
+          {/* Summary Cards - With Opening and Profit */}
           <div className="stats-row">
             <div className="stat-box">
-              <div className="stat-box-label">Monthly EMI</div>
-              <div className="stat-box-value primary">₹{selectedChit?.monthly_installment?.toLocaleString('en-IN')}</div>
+              <div className="stat-box-label">Opening (पहले से)</div>
+              <div className="stat-box-value primary">
+                {selectedChit?.opening_installments_paid || 0} Inst. (₹{(selectedChit?.opening_amount_paid || 0).toLocaleString('en-IN')})
+              </div>
             </div>
             <div className="stat-box">
               <div className="stat-box-label">Total Paid (भुगतान)</div>
-              <div className="stat-box-value danger">₹{chitSummary?.summary?.total_paid?.toLocaleString('en-IN') || 0}</div>
+              <div className="stat-box-value danger">
+                ₹{((chitSummary?.summary?.total_paid || 0) + (selectedChit?.opening_amount_paid || 0)).toLocaleString('en-IN')}
+              </div>
             </div>
             <div className="stat-box">
               <div className="stat-box-label">Total Mila (लाभांश)</div>
               <div className="stat-box-value success">₹{chitSummary?.summary?.total_dividend?.toLocaleString('en-IN') || 0}</div>
             </div>
             <div className="stat-box">
-              <div className="stat-box-label">Net Profit (शुद्ध लाभ)</div>
-              <div className={`stat-box-value ${chitSummary?.summary?.is_profit ? 'success' : 'danger'}`}>
-                {chitSummary?.summary?.is_profit ? '+' : ''}₹{chitSummary?.summary?.net_profit?.toLocaleString('en-IN') || 0}
+              <div className="stat-box-label">Effective Cost</div>
+              <div className="stat-box-value warning">
+                ₹{(((chitSummary?.summary?.total_paid || 0) + (selectedChit?.opening_amount_paid || 0)) - (chitSummary?.summary?.total_dividend || 0)).toLocaleString('en-IN')}
               </div>
             </div>
           </div>
+
+          {/* Expected vs Actual Profit */}
+          {(() => {
+            const totalInstallments = (chitSummary?.summary?.months_completed || 0) + (selectedChit?.opening_installments_paid || 0);
+            const expectedTotalPay = totalInstallments * (selectedChit?.monthly_installment || 0);
+            const actualPaid = (chitSummary?.summary?.total_paid || 0) + (selectedChit?.opening_amount_paid || 0);
+            const profitSoFar = expectedTotalPay - actualPaid + (chitSummary?.summary?.total_dividend || 0);
+            const expectedFinalProfit = (selectedChit?.duration_months * selectedChit?.monthly_installment) - (selectedChit?.chit_value || 0);
+            
+            return (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+                  <div className="text-xs text-blue-600 mb-1">Total Installments Done</div>
+                  <div className="text-2xl font-bold text-blue-700">{totalInstallments} / {selectedChit?.duration_months}</div>
+                </div>
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">
+                  <div className="text-xs text-amber-600 mb-1">Expected Pay (Installment × EMI)</div>
+                  <div className="text-2xl font-bold text-amber-700">₹{expectedTotalPay.toLocaleString('en-IN')}</div>
+                </div>
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+                  <div className="text-xs text-green-600 mb-1">Profit So Far (अभी तक का लाभ)</div>
+                  <div className="text-2xl font-bold text-green-700">₹{profitSoFar.toLocaleString('en-IN')}</div>
+                </div>
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 text-center">
+                  <div className="text-xs text-purple-600 mb-1">Expected Final Profit</div>
+                  <div className="text-2xl font-bold text-purple-700">₹{expectedFinalProfit.toLocaleString('en-IN')}</div>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Chit Info Bar */}
           <div className="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-lg p-4 mb-4">
@@ -299,11 +357,25 @@ const ChitFund = () => {
                   <div className="w-32 h-3 bg-gray-200 rounded-full overflow-hidden">
                     <div 
                       className="h-full bg-purple-500 rounded-full transition-all" 
-                      style={{width: `${((chitSummary?.summary?.months_completed || 0) / selectedChit?.duration_months) * 100}%`}}
+                      style={{width: `${(((chitSummary?.summary?.months_completed || 0) + (selectedChit?.opening_installments_paid || 0)) / selectedChit?.duration_months) * 100}%`}}
                     ></div>
                   </div>
-                  <span className="text-lg font-bold text-purple-700">{chitSummary?.summary?.months_completed || 0}/{selectedChit?.duration_months}</span>
+                  <span className="text-lg font-bold text-purple-700">{(chitSummary?.summary?.months_completed || 0) + (selectedChit?.opening_installments_paid || 0)}/{selectedChit?.duration_months}</span>
                 </div>
+              </div>
+              <div>
+                <button 
+                  onClick={() => {
+                    setOpeningFormData({
+                      opening_installments_paid: selectedChit?.opening_installments_paid || 0,
+                      opening_amount_paid: selectedChit?.opening_amount_paid || 0
+                    });
+                    setShowEditOpeningModal(true);
+                  }}
+                  className="btn btn-secondary text-xs"
+                >
+                  Edit Opening
+                </button>
               </div>
               <div>
                 <div className="text-sm text-purple-600">Status</div>
@@ -605,6 +677,79 @@ const ChitFund = () => {
               <div className="modal-footer">
                 <button type="button" onClick={() => setShowLiftModal(false)} className="btn btn-secondary">Cancel</button>
                 <button type="submit" className="btn btn-warning">Confirm Lift</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Opening Balance Modal */}
+      {showEditOpeningModal && selectedChit && (
+        <div className="modal-overlay" onClick={() => setShowEditOpeningModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header bg-gradient-to-r from-blue-500 to-indigo-500 text-white">
+              <div className="modal-title text-white">Edit Opening Balance - {selectedChit.name}</div>
+              <button className="modal-close text-white" onClick={() => setShowEditOpeningModal(false)}>&times;</button>
+            </div>
+            <form onSubmit={handleUpdateOpening}>
+              <div className="modal-body">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                  <p className="text-blue-700 text-sm">
+                    <strong>Note:</strong> Agar aapne pehle se kuch installments pay kar diye hain jo is software me nahi hain, 
+                    toh yahan daal do. Ye opening balance ki tarah kaam karega.
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="form-group">
+                    <label className="form-label">Installments Already Paid</label>
+                    <input 
+                      type="number" 
+                      className="form-control text-xl font-bold" 
+                      value={openingFormData.opening_installments_paid} 
+                      onChange={(e) => setOpeningFormData({...openingFormData, opening_installments_paid: e.target.value})} 
+                      placeholder="e.g., 16"
+                      min="0"
+                    />
+                    <div className="text-xs text-gray-500 mt-1">Kitne installment pehle pay kar chuke ho</div>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Total Amount Paid (₹)</label>
+                    <input 
+                      type="number" 
+                      className="form-control text-xl font-bold" 
+                      value={openingFormData.opening_amount_paid} 
+                      onChange={(e) => setOpeningFormData({...openingFormData, opening_amount_paid: e.target.value})} 
+                      placeholder="e.g., 700000"
+                      min="0"
+                    />
+                    <div className="text-xs text-gray-500 mt-1">Total kitna paisa diya hua hai</div>
+                  </div>
+                </div>
+                
+                {/* Preview calculation */}
+                <div className="bg-gray-50 rounded-lg p-4 mt-4">
+                  <div className="text-sm text-gray-600 mb-2">Preview:</div>
+                  <div className="grid grid-cols-2 gap-4 text-center">
+                    <div>
+                      <div className="text-xs text-gray-500">Expected (Inst × EMI)</div>
+                      <div className="font-bold">₹{((parseInt(openingFormData.opening_installments_paid) || 0) * selectedChit.monthly_installment).toLocaleString('en-IN')}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500">Actual Paid</div>
+                      <div className="font-bold">₹{(parseFloat(openingFormData.opening_amount_paid) || 0).toLocaleString('en-IN')}</div>
+                    </div>
+                  </div>
+                  <div className="text-center mt-2 pt-2 border-t">
+                    <div className="text-xs text-gray-500">Profit So Far</div>
+                    <div className="text-xl font-bold text-green-600">
+                      ₹{(((parseInt(openingFormData.opening_installments_paid) || 0) * selectedChit.monthly_installment) - (parseFloat(openingFormData.opening_amount_paid) || 0)).toLocaleString('en-IN')}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" onClick={() => setShowEditOpeningModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary">Update Opening</button>
               </div>
             </form>
           </div>
