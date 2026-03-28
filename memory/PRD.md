@@ -3,122 +3,97 @@
 ## Original Problem Statement
 - Staff attendance tracking with Present, Absent, Half Day options
 - Salary calculation always based on 30 days (regardless of month)
-- **Unified Accounting System** - Everything in one place:
-  - **Master Cash Book** - Single page for all transactions
-  - Party Ledger auto-updates from Cash Book
-  - Expenses auto-track by category from Cash Book
-  - Chit Fund entries visible in Cash Book
-  - Byaj (Interest) linked to Cash Book
-  - Auto-generated P&L and Balance Sheet
-  - Financial Year (April-March) filtering
-- Electron Desktop App with `.exe` on GitHub push
+- **Everything Connected to Cash Book** - All transactions from all modules auto-link to Cash Book
 
-## Unified Cash Book Design
+## Unified Cash Book System
 
-### How It Works
-The Cash Book is now the **central command center** where all financial transactions happen:
+### All Modules Auto-Connected
 
-1. **Entry Form on Left** (always visible, not modal)
-   - Credit/Debit toggle (Green/Red)
-   - Amount input
-   - Party dropdown (with existing balance shown)
-   - "+ New Party" - Create party inline
-   - Category dropdown (only for Debit entries)
-   - Payment Mode buttons (Cash/UPI/Bank)
-   - Date picker
-   - Description
+| Module | Action | Cash Book Entry |
+|--------|--------|-----------------|
+| **Salary** | Pay Salary | DEBIT (category: salary) |
+| **Advance** | Give Advance | DEBIT (category: salary) |
+| **Byaj** | Add to Cash Book | DEBIT (category: interest_paid) |
+| **Chit Fund** | Pay EMI | DEBIT (category: chit_fund) |
+| **Chit Fund** | Lift (Uthao) | CREDIT |
+| **Party Ledger** | Transaction | DEBIT/CREDIT |
+| **Expenses** | Add Expense | DEBIT (with category) |
 
-2. **Transactions Table on Right**
-   - Today/Week/Month filter
-   - All transactions from everywhere
-   - Columns: Date, Description, Party, Category, Mode, Credit, Debit, Action
-   - Chit Fund entries also visible here
+### Cash Book Page Design
+- **Left Side**: Entry form (always visible)
+  - Credit/Debit toggle (Green/Red)
+  - Amount input
+  - Party dropdown (+ New Party inline)
+  - Category dropdown (Debit mode)
+  - Payment Mode buttons (Cash/UPI/Bank)
+- **Right Side**: Transaction list
+  - Today/Week/Month filters
+  - All entries from all modules
+  - Category, Party, Mode columns
 
-3. **Expense by Category Summary**
-   - Appears in Debit mode
-   - Shows totals by category (Rent, Salary, Chit Fund, etc.)
+### Salary Page
+- Calculate Salary button
+- Salary Slip with breakdown
+- **Pay Salary button** → Opens modal
+  - Shows: Total Earned, Advance Deduction, Net Payable
+  - Auto-creates Cash Book Debit entry
 
-### Auto-Connections
-- **Party Ledger**: Selecting party auto-updates their balance
-- **Expenses**: Category selection auto-tracks expense
-- **Chit Fund**: EMI entries appear as Debit in Cash Book
-- **Byaj**: Interest entries link to Cash Book
+### Chit Fund Page
+- Simple dropdown to select chit
+- Monthly entry with:
+  - Month dropdown (paid months marked ✓)
+  - EMI Paid
+  - Is Mahine Mila (Dividend)
+  - Auto-calculate Effective Cost
+- Lift (Uthao) option
+- Net Profit summary
 
-## Chit Fund System
+## API Endpoints
 
-### Simplified Flow
-1. Select Chit from dropdown (or add new)
-2. Add monthly entry:
-   - Select Month (dropdown shows paid months with ✓)
-   - EMI Paid (₹)
-   - Is Mahine Mila (₹) - Direct profit/dividend input
-3. System calculates: **Effective Cost = EMI - Mila**
-4. When you lift (uthao), record the amount received
-5. Final Summary: Total Paid, Total Dividend, Lifted Amount, Net Profit
+### Salary
+- `POST /api/salary/pay` - Pay salary (auto Cash Book)
+- `GET /api/salary/{staff_id}/{month}` - Calculate salary
+- `GET /api/salary/payments/{month}` - Get payments list
 
-### Example
-- EMI: ₹50,000 (pay kiya)
-- Mila: ₹20,000 (profit aya)
-- Effective Cost: ₹30,000
+### Advance
+- `POST /api/advances` - Create advance (auto Cash Book)
+- `GET /api/advances` - List advances
 
-## Architecture
-- **Backend**: FastAPI + MongoDB
-- **Frontend**: React + Tailwind CSS + Shadcn UI
-- **Desktop**: Electron wrapper
-
-## What's Been Implemented (March 2026)
-
-### Staff Management
-- [x] Staff CRUD operations
-- [x] Attendance marking
-- [x] Salary calculation (30-day basis)
-- [x] Advance tracking
-
-### Unified Accounting
-- [x] **Unified Cash Book** - Entry form on page, all transactions visible
-- [x] Party auto-create inline
-- [x] Category-wise expense tracking
-- [x] Party Ledger with Opening Balance
-- [x] Financial Year filtering
-- [x] P&L Statement (auto from Cash Book)
-- [x] Balance Sheet (auto from all modules)
+### Cash Book
+- `GET /api/cashbook/{date}` - Daily transactions
+- `GET /api/cashbook/monthly/{month}` - Monthly transactions
+- `POST /api/transactions` - Manual entry
 
 ### Chit Fund
-- [x] Simplified dividend system (EMI - Mila = Effective Cost)
-- [x] Month dropdown with paid months marked
-- [x] Lift tracking
-- [x] Net profit calculation
-- [x] Cash Book integration
-
-### Byaj (Interest)
-- [x] 30-day monthly basis
-- [x] One-click add to Cash Book
+- `POST /api/chit-funds/{id}/monthly-entry` - EMI (auto Cash Book)
+- `POST /api/chit-funds/{id}/lift` - Lift (auto Cash Book credit)
 
 ## Testing Status
-- Backend: 100% (All tests passed across iterations 6-10)
-- Frontend: 100% (All features verified with Playwright)
+- Backend: 100% (14/14 tests passed - iteration 11)
+- Frontend: 100% (All features verified)
 
-## Prioritized Backlog
+## Implementation Complete (March 2026)
 
-### P0 (Completed)
-- ✅ Staff management
-- ✅ Attendance & Salary (30-day basis)
-- ✅ Unified Cash Book
-- ✅ Party Ledger with Opening Balance
-- ✅ Chit Fund with Dividend tracking
-- ✅ Byaj (Interest) system
-- ✅ P&L & Balance Sheet
-- ✅ Financial Year filtering
+### Done
+- [x] Staff management (CRUD, Attendance, Salary)
+- [x] 30-day salary calculation
+- [x] Unified Cash Book (central ledger)
+- [x] Auto-link: Salary → Cash Book
+- [x] Auto-link: Advance → Cash Book
+- [x] Auto-link: Byaj → Cash Book
+- [x] Auto-link: Chit Fund → Cash Book
+- [x] Party Ledger with balance tracking
+- [x] Expense category tracking
+- [x] Chit Fund dividend system
+- [x] P&L Statement (auto from Cash Book)
+- [x] Balance Sheet (auto from all modules)
+- [x] Financial Year (April-March) filtering
 
-### P1 (Important)
+### Backlog
 - [ ] Electron Auto-Update
-- [ ] PDF Export for reports
-- [ ] Excel Export for reports
-
-### P2 (Future)
-- [ ] Receipt/Invoice printing
-- [ ] Multiple organization support
-- [ ] Cloud data backup
+- [ ] PDF Export
+- [ ] Excel Export
+- [ ] Receipt Printing
 
 ## User Language
 - Primary: Hindi / Hinglish
