@@ -4,6 +4,7 @@ import { API } from "@/App";
 import { toast } from "sonner";
 import { format, subMonths } from "date-fns";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { exportSalarySlipPDF, printReceipt } from "@/utils/exportUtils";
 
 const SalaryCalculator = () => {
   const [staffList, setStaffList] = useState([]);
@@ -56,7 +57,6 @@ const SalaryCalculator = () => {
       ]);
       setSalaryData(salaryRes.data);
       
-      // Get advance for this staff
       const staffAdvance = advanceRes.data.find(a => a.staff_id === selectedStaff.id);
       setAdvanceData({
         total: staffAdvance?.total_advance || 0,
@@ -70,7 +70,6 @@ const SalaryCalculator = () => {
   };
 
   const openPayModal = () => {
-    const netPayable = salaryData.total_earned - advanceData.total;
     setPaymentData({
       amount: salaryData.total_earned,
       advance_deducted: advanceData.total,
@@ -98,11 +97,47 @@ const SalaryCalculator = () => {
       const netPaid = paymentData.amount - paymentData.advance_deducted;
       toast.success(`Salary ₹${netPaid.toLocaleString('en-IN')} paid! Cash Book me entry ho gayi.`);
       setShowPayModal(false);
+      
+      // Ask to print receipt
+      if (window.confirm("Receipt print karna hai?")) {
+        printReceipt({
+          type: 'salary',
+          staffName: selectedStaff.name,
+          amount: paymentData.amount,
+          date: paymentData.payment_date,
+          month: format(new Date(selectedMonth + '-01'), 'MMMM yyyy'),
+          paymentMode: paymentData.payment_mode,
+          note: paymentData.note,
+          advanceDeducted: paymentData.advance_deducted,
+          netPaid: netPaid
+        });
+      }
     } catch (error) {
       toast.error(error.response?.data?.detail || "Payment failed");
     } finally {
       setPaying(false);
     }
+  };
+
+  const handleExportPDF = () => {
+    if (!salaryData || !selectedStaff) return;
+    exportSalarySlipPDF(salaryData, advanceData, selectedStaff.name);
+    toast.success("Salary slip PDF downloaded!");
+  };
+
+  const handlePrintReceipt = () => {
+    if (!salaryData || !selectedStaff) return;
+    const netPayable = salaryData.total_earned - advanceData.total;
+    printReceipt({
+      type: 'salary',
+      staffName: selectedStaff.name,
+      amount: salaryData.total_earned,
+      date: format(new Date(), 'yyyy-MM-dd'),
+      month: format(new Date(selectedMonth + '-01'), 'MMMM yyyy'),
+      paymentMode: 'cash',
+      advanceDeducted: advanceData.total,
+      netPaid: netPayable
+    });
   };
 
   const monthOptions = getMonthOptions();
@@ -159,9 +194,13 @@ const SalaryCalculator = () => {
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
               Pay Salary
             </button>
-            <button className="action-btn outline-primary" onClick={() => window.print()}>
+            <button className="action-btn outline-danger" onClick={handleExportPDF} data-testid="export-pdf-btn">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+              PDF
+            </button>
+            <button className="action-btn outline-primary" onClick={handlePrintReceipt} data-testid="print-receipt-btn">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-              Print
+              Receipt
             </button>
           </>
         )}

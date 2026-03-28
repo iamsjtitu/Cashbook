@@ -6,6 +6,7 @@ import { format } from "date-fns";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { printReceipt } from "@/utils/exportUtils";
 
 const Advance = () => {
   const [staffList, setStaffList] = useState([]);
@@ -37,10 +38,24 @@ const Advance = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const staffName = staffList.find(s => s.id === formData.staff_id)?.name || 'Staff';
     try {
       await axios.post(`${API}/advances`, { ...formData, amount: parseFloat(formData.amount) });
       toast.success("Advance added! Cash Book me bhi entry ho gayi.");
       setShowModal(false);
+      
+      // Ask to print receipt
+      if (window.confirm("Receipt print karna hai?")) {
+        printReceipt({
+          type: 'advance',
+          staffName: staffName,
+          amount: parseFloat(formData.amount),
+          date: formData.date,
+          paymentMode: 'cash',
+          note: formData.note
+        });
+      }
+      
       setFormData({ staff_id: staffList[0]?.id || "", amount: "", date: format(new Date(), "yyyy-MM-dd"), note: "" });
       fetchData();
     } catch (error) {

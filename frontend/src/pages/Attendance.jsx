@@ -3,7 +3,8 @@ import axios from "axios";
 import { API } from "@/App";
 import { toast } from "sonner";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, addMonths, subMonths, getDay } from "date-fns";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { exportAttendancePDF, exportAttendanceExcel } from "@/utils/exportUtils";
 
 const Attendance = () => {
   const [staffList, setStaffList] = useState([]);
@@ -11,7 +12,7 @@ const Attendance = () => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [attendance, setAttendance] = useState({});
   const [loading, setLoading] = useState(true);
-  const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [bulkMarking, setBulkMarking] = useState(false);
 
   const fetchAttendance = useCallback(async () => {
     if (!selectedStaff) return;
@@ -52,8 +53,64 @@ const Attendance = () => {
     }
   };
 
-  const saveAllAttendance = () => {
-    toast.success("Attendance saved successfully!");
+  // Bulk mark all staff for today
+  const bulkMarkAllStaff = async (status) => {
+    if (staffList.length === 0) {
+      toast.error("No staff to mark");
+      return;
+    }
+    
+    setBulkMarking(true);
+    const today = format(new Date(), "yyyy-MM-dd");
+    let successCount = 0;
+    let failCount = 0;
+    
+    for (const staff of staffList) {
+      try {
+        await axios.post(`${API}/attendance`, { staff_id: staff.id, date: today, status });
+        successCount++;
+      } catch (error) {
+        failCount++;
+      }
+    }
+    
+    if (successCount > 0) {
+      toast.success(`${successCount} staff marked ${status.replace("_", " ")} for today!`);
+      // Refresh current staff's attendance
+      if (selectedStaff) fetchAttendance();
+    }
+    if (failCount > 0) {
+      toast.error(`${failCount} staff failed to mark`);
+    }
+    setBulkMarking(false);
+  };
+
+  // Mark all unmarked days in current month
+  const bulkMarkMonth = async (status) => {
+    if (!selectedStaff) return;
+    
+    setBulkMarking(true);
+    const days = getDaysInMonth().filter(day => day <= new Date() && !attendance[format(day, "yyyy-MM-dd")]);
+    
+    if (days.length === 0) {
+      toast.info("No unmarked days to fill");
+      setBulkMarking(false);
+      return;
+    }
+    
+    let successCount = 0;
+    for (const day of days) {
+      try {
+        await axios.post(`${API}/attendance`, { staff_id: selectedStaff.id, date: format(day, "yyyy-MM-dd"), status });
+        successCount++;
+      } catch (error) {
+        console.error("Error marking:", error);
+      }
+    }
+    
+    toast.success(`${successCount} days marked ${status.replace("_", " ")}!`);
+    fetchAttendance();
+    setBulkMarking(false);
   };
 
   const getDaysInMonth = () => eachDayOfInterval({ start: startOfMonth(currentMonth), end: endOfMonth(currentMonth) });
@@ -70,6 +127,19 @@ const Attendance = () => {
       else if (day <= new Date()) unmarked++;
     });
     return { present, absent, halfDay, unmarked };
+  };
+
+  const handleExportPDF = () => {
+    if (!selectedStaff) return;
+    const summary = getSummary();
+    exportAttendancePDF(selectedStaff.name, format(currentMonth, "MMMM yyyy"), attendance, summary);
+    toast.success("PDF downloaded!");
+  };
+
+  const handleExportExcel = () => {
+    if (!selectedStaff) return;
+    exportAttendanceExcel(selectedStaff.name, format(currentMonth, "yyyy-MM"), attendance);
+    toast.success("Excel downloaded!");
   };
 
   if (loading) return <div className="text-center py-8">Loading...</div>;
@@ -113,15 +183,44 @@ const Attendance = () => {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <button onClick={saveAllAttendance} className="action-btn success">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-          Save Attendance
-        </button>
-        <button className="action-btn outline-primary">
+        {/* Bulk Mark Dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="action-btn success" disabled={bulkMarking} data-testid="bulk-mark-btn">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {bulkMarking ? "Marking..." : "Bulk Mark"}
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="bg-white rounded-lg shadow-lg border w-64">
+            <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase">All Staff - Today</div>
+            <DropdownMenuItem onClick={() => bulkMarkAllStaff("present")} className="cursor-pointer hover:bg-green-50 px-3 py-2">
+              <div className="legend-dot present text-xs mr-2">P</div> Mark All Present Today
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => bulkMarkAllStaff("absent")} className="cursor-pointer hover:bg-red-50 px-3 py-2">
+              <div className="legend-dot absent text-xs mr-2">A</div> Mark All Absent Today
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => bulkMarkAllStaff("half_day")} className="cursor-pointer hover:bg-yellow-50 px-3 py-2">
+              <div className="legend-dot halfday text-xs mr-2">H</div> Mark All Half Day Today
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase">{selectedStaff?.name} - Fill Month</div>
+            <DropdownMenuItem onClick={() => bulkMarkMonth("present")} className="cursor-pointer hover:bg-green-50 px-3 py-2">
+              <div className="legend-dot present text-xs mr-2">P</div> Fill Unmarked as Present
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => bulkMarkMonth("absent")} className="cursor-pointer hover:bg-red-50 px-3 py-2">
+              <div className="legend-dot absent text-xs mr-2">A</div> Fill Unmarked as Absent
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <button onClick={handleExportExcel} className="action-btn outline-primary" data-testid="export-excel-btn">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
           Excel
         </button>
-        <button className="action-btn outline-danger">
+        <button onClick={handleExportPDF} className="action-btn outline-danger" data-testid="export-pdf-btn">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
           PDF
         </button>

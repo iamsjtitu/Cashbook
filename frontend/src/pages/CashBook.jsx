@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { format, subDays } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { exportCashBookPDF, exportCashBookExcel } from "@/utils/exportUtils";
 
 const CashBook = () => {
   const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
@@ -382,6 +383,32 @@ const CashBook = () => {
                     />
                   </PopoverContent>
                 </Popover>
+
+                {/* Export Buttons */}
+                <button 
+                  onClick={() => {
+                    const rangeLabel = dateRange === 'today' ? format(new Date(selectedDate), 'dd-MM-yyyy') : dateRange === 'week' ? 'Last 7 Days' : format(new Date(selectedDate), 'MMMM yyyy');
+                    exportCashBookExcel(transactions, rangeLabel);
+                    toast.success("Excel downloaded!");
+                  }}
+                  className="btn btn-secondary text-sm"
+                  data-testid="cashbook-excel-btn"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                  Excel
+                </button>
+                <button 
+                  onClick={() => {
+                    const rangeLabel = dateRange === 'today' ? format(new Date(selectedDate), 'dd-MM-yyyy') : dateRange === 'week' ? 'Last 7 Days' : format(new Date(selectedDate), 'MMMM yyyy');
+                    exportCashBookPDF(transactions, rangeLabel, { credit: summary.credit, debit: summary.debit });
+                    toast.success("PDF downloaded!");
+                  }}
+                  className="btn btn-secondary text-sm"
+                  data-testid="cashbook-pdf-btn"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                  PDF
+                </button>
               </div>
             </div>
             <div className="data-card-body p-0">

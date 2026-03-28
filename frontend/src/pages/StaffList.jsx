@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { exportStaffListPDF, exportStaffListExcel } from "@/utils/exportUtils";
 
 const StaffList = () => {
   const [staffList, setStaffList] = useState([]);
@@ -82,13 +83,21 @@ const StaffList = () => {
           </svg>
           Add Staff
         </button>
-        <button className="action-btn outline-primary">
+        <button 
+          onClick={() => { exportStaffListExcel(staffList); toast.success("Excel downloaded!"); }}
+          className="action-btn outline-primary"
+          data-testid="staff-excel-btn"
+        >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
           </svg>
           Excel
         </button>
-        <button className="action-btn outline-danger">
+        <button 
+          onClick={() => { exportStaffListPDF(staffList); toast.success("PDF downloaded!"); }}
+          className="action-btn outline-danger"
+          data-testid="staff-pdf-btn"
+        >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
           </svg>
