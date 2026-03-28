@@ -1,9 +1,14 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-// Expose all database APIs to renderer
 contextBridge.exposeInMainWorld('electronAPI', {
   // Check if running in Electron
   isElectron: true,
+  
+  // Folder Selection (for startup screen)
+  selectFolder: (type) => ipcRenderer.invoke('selectFolder', type),
+  getDataFolder: () => ipcRenderer.invoke('getDataFolder'),
+  setDataFolder: (folder) => ipcRenderer.invoke('setDataFolder', folder),
+  loadMainApp: () => ipcRenderer.invoke('loadMainApp'),
   
   // Auth
   login: (password) => ipcRenderer.invoke('auth:login', password),
@@ -75,10 +80,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   readBackupFile: (filepath) => ipcRenderer.invoke('backup:readFile', filepath),
   
   // Folder operations
-  getDataFolder: () => ipcRenderer.invoke('folder:getData'),
-  selectDataFolder: () => ipcRenderer.invoke('folder:select'),
   openFolder: (path) => ipcRenderer.invoke('folder:open', path),
-  
+
   // Auto backup
   getAutoBackupSettings: () => ipcRenderer.invoke('autoBackup:get'),
   setAutoBackupSettings: (settings) => ipcRenderer.invoke('autoBackup:set', settings)

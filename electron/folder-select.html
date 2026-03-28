@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Staff Manager - Data Selection</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+    }
+    
+    .container {
+      width: 500px;
+      background: rgba(20, 25, 45, 0.95);
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+      overflow: hidden;
+    }
+    
+    .header {
+      padding: 30px;
+      text-align: center;
+      border-bottom: 3px solid #ff6b35;
+    }
+    
+    .logo {
+      font-size: 42px;
+      margin-bottom: 8px;
+    }
+    
+    .title {
+      font-size: 28px;
+      font-weight: 700;
+      color: #ff6b35;
+      margin-bottom: 5px;
+    }
+    
+    .subtitle {
+      font-size: 14px;
+      color: #8892b0;
+    }
+    
+    .content {
+      padding: 30px;
+    }
+    
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #ff6b35;
+      margin-bottom: 20px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    
+    .section-title .icon {
+      font-size: 18px;
+    }
+    
+    .folder-box {
+      border: 2px dashed #3d4f6f;
+      border-radius: 12px;
+      padding: 40px 20px;
+      text-align: center;
+      margin-bottom: 25px;
+      transition: all 0.3s;
+    }
+    
+    .folder-box:hover {
+      border-color: #ff6b35;
+      background: rgba(255, 107, 53, 0.05);
+    }
+    
+    .folder-icon {
+      font-size: 60px;
+      margin-bottom: 15px;
+    }
+    
+    .folder-text {
+      font-size: 16px;
+      color: #ccd6f6;
+      margin-bottom: 8px;
+    }
+    
+    .folder-subtext {
+      font-size: 13px;
+      color: #8892b0;
+    }
+    
+    .buttons {
+      display: flex;
+      gap: 15px;
+    }
+    
+    .btn {
+      flex: 1;
+      padding: 16px 20px;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: all 0.3s;
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+      color: #fff;
+    }
+    
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(255, 107, 53, 0.4);
+    }
+    
+    .btn-secondary {
+      background: #2d3748;
+      color: #ccd6f6;
+    }
+    
+    .btn-secondary:hover {
+      background: #3d4a5c;
+      transform: translateY(-2px);
+    }
+    
+    .btn .icon {
+      font-size: 18px;
+    }
+    
+    .footer {
+      padding: 15px 30px;
+      background: rgba(0,0,0,0.2);
+      text-align: center;
+      font-size: 12px;
+      color: #8892b0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    
+    .footer .icon {
+      color: #ff6b35;
+    }
+    
+    .selected-path {
+      margin-top: 20px;
+      padding: 12px 15px;
+      background: rgba(255, 107, 53, 0.1);
+      border: 1px solid #ff6b35;
+      border-radius: 8px;
+      font-size: 13px;
+      color: #ccd6f6;
+      word-break: break-all;
+      display: none;
+    }
+    
+    .selected-path.show {
+      display: block;
+    }
+    
+    .btn-start {
+      margin-top: 15px;
+      width: 100%;
+      padding: 18px;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      display: none;
+    }
+    
+    .btn-start.show {
+      display: flex;
+    }
+    
+    .loading {
+      display: none;
+      text-align: center;
+      padding: 40px;
+    }
+    
+    .loading.show {
+      display: block;
+    }
+    
+    .spinner {
+      width: 50px;
+      height: 50px;
+      border: 4px solid #3d4f6f;
+      border-top-color: #ff6b35;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">👥</div>
+      <div class="title">Staff Manager</div>
+      <div class="subtitle">Attendance & Salary Management System</div>
+    </div>
+    
+    <div class="content" id="mainContent">
+      <div class="section-title">
+        <span class="icon">📁</span>
+        DATA FOLDER SELECT KAREIN
+      </div>
+      
+      <div class="folder-box">
+        <div class="folder-icon">📂</div>
+        <div class="folder-text">Har bar apna data folder manually select karein</div>
+        <div class="folder-subtext">Neeche se folder select ya create karein</div>
+      </div>
+      
+      <div class="buttons">
+        <button class="btn btn-primary" onclick="openExisting()">
+          <span class="icon">📁</span>
+          Open Existing Folder
+        </button>
+        <button class="btn btn-secondary" onclick="createNew()">
+          <span class="icon">➕</span>
+          Create New Folder
+        </button>
+      </div>
+      
+      <div class="selected-path" id="selectedPath"></div>
+      
+      <button class="btn btn-primary btn-start" id="startBtn" onclick="startApp()">
+        <span class="icon">🚀</span>
+        Start Application
+      </button>
+    </div>
+    
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <div class="folder-text">Loading Staff Manager...</div>
+      <div class="folder-subtext">Please wait</div>
+    </div>
+    
+    <div class="footer">
+      <span class="icon">💾</span>
+      Data aapke selected folder mein locally save hoga | No internet required
+    </div>
+  </div>
+  
+  <script>
+    let selectedFolder = null;
+    
+    async function openExisting() {
+      const result = await window.electronAPI.selectFolder('existing');
+      if (result) {
+        selectedFolder = result;
+        showSelectedPath(result);
+      }
+    }
+    
+    async function createNew() {
+      const result = await window.electronAPI.selectFolder('new');
+      if (result) {
+        selectedFolder = result;
+        showSelectedPath(result);
+      }
+    }
+    
+    function showSelectedPath(path) {
+      document.getElementById('selectedPath').textContent = '📂 ' + path;
+      document.getElementById('selectedPath').classList.add('show');
+      document.getElementById('startBtn').classList.add('show');
+    }
+    
+    async function startApp() {
+      document.getElementById('mainContent').style.display = 'none';
+      document.getElementById('loading').classList.add('show');
+      
+      await window.electronAPI.setDataFolder(selectedFolder);
+      await window.electronAPI.loadMainApp();
+    }
+    
+    // Check if folder already set
+    window.onload = async () => {
+      const existingFolder = await window.electronAPI.getDataFolder();
+      if (existingFolder) {
+        selectedFolder = existingFolder;
+        showSelectedPath(existingFolder);
+      }
+    };
+  </script>
+</body>
+</html>
