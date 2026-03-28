@@ -2,47 +2,90 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import { API } from "@/App";
 import { toast } from "sonner";
-import { format, subMonths } from "date-fns";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { format, subDays } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 const CashBook = () => {
   const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [cashbookData, setCashbookData] = useState(null);
+  const [dateRange, setDateRange] = useState("today"); // today, week, month, all
+  const [transactions, setTransactions] = useState([]);
   const [parties, setParties] = useState([]);
+  const [summary, setSummary] = useState({ opening: 0, credit: 0, debit: 0, closing: 0 });
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [showOBModal, setShowOBModal] = useState(false);
-  const [openingBalance, setOpeningBalance] = useState({ amount: 0, as_on_date: "2025-04-01" });
   const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [showNewPartyInput, setShowNewPartyInput] = useState(false);
+  const [newPartyName, setNewPartyName] = useState("");
+  
+  // Entry Form State (always visible on page)
   const [formData, setFormData] = useState({
     date: format(new Date(), "yyyy-MM-dd"),
-    party_id: "",
     transaction_type: "credit",
     amount: "",
+    party_id: "",
+    party_name: "", // For new party
     payment_mode: "cash",
+    category: "",
     description: ""
   });
 
-  useEffect(() => { fetchData(); fetchOB(); }, [selectedDate]);
+  const expenseCategories = [
+    { value: "", label: "-- No Category --" },
+    { value: "salary", label: "Salary (वेतन)" },
+    { value: "rent", label: "Rent (किराया)" },
+    { value: "electricity", label: "Electricity (बिजली)" },
+    { value: "supplies", label: "Supplies (सामान)" },
+    { value: "transport", label: "Transport (यातायात)" },
+    { value: "food", label: "Food (खाना)" },
+    { value: "maintenance", label: "Maintenance (मरम्मत)" },
+    { value: "chit_fund", label: "Chit Fund (चिट फंड)" },
+    { value: "interest", label: "Interest/Byaj (ब्याज)" },
+    { value: "other", label: "Other (अन्य)" }
+  ];
 
-  const fetchOB = async () => {
-    try {
-      const res = await axios.get(`${API}/cashbook/opening-balance`);
-      setOpeningBalance({ amount: res.data.opening_balance, as_on_date: res.data.as_on_date });
-    } catch (err) { console.error(err); }
-  };
+  useEffect(() => { fetchData(); }, [selectedDate, dateRange]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [cbRes, partiesRes] = await Promise.all([
-        axios.get(`${API}/cashbook/${selectedDate}`),
-        axios.get(`${API}/parties`)
-      ]);
-      setCashbookData(cbRes.data);
+      // Fetch parties
+      const partiesRes = await axios.get(`${API}/parties`);
       setParties(partiesRes.data);
+      
+      // Fetch transactions based on date range
+      let txnRes;
+      if (dateRange === "today") {
+        txnRes = await axios.get(`${API}/cashbook/${selectedDate}`);
+        setTransactions(txnRes.data.transactions || []);
+        setSummary({
+          opening: txnRes.data.opening_balance || 0,
+          credit: txnRes.data.total_credit || 0,
+          debit: txnRes.data.total_debit || 0,
+          closing: txnRes.data.closing_balance || 0
+        });
+      } else {
+        // For week/month/all, fetch from monthly API or all transactions
+        const month = format(new Date(selectedDate), "yyyy-MM");
+        txnRes = await axios.get(`${API}/cashbook/monthly/${month}`);
+        const allTxns = txnRes.data.transactions || [];
+        
+        // Filter based on range
+        let filtered = allTxns;
+        if (dateRange === "week") {
+          const weekAgo = format(subDays(new Date(), 7), "yyyy-MM-dd");
+          filtered = allTxns.filter(t => t.date >= weekAgo);
+        }
+        
+        setTransactions(filtered);
+        const credit = filtered.filter(t => t.transaction_type === "credit").reduce((s, t) => s + t.amount, 0);
+        const debit = filtered.filter(t => t.transaction_type === "debit").reduce((s, t) => s + t.amount, 0);
+        setSummary({
+          opening: txnRes.data.opening_balance || 0,
+          credit,
+          debit,
+          closing: (txnRes.data.opening_balance || 0) + credit - debit
+        });
+      }
     } catch (error) {
       console.error("Error:", error);
     } finally {
@@ -52,250 +95,391 @@ const CashBook = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
     try {
+      let partyId = formData.party_id;
+      
+      // If new party name entered, create party first
+      if (showNewPartyInput && newPartyName.trim()) {
+        const partyRes = await axios.post(`${API}/parties`, {
+          name: newPartyName.trim(),
+          phone: "",
+          address: "",
+          opening_balance: 0,
+          balance_type: formData.transaction_type === "credit" ? "credit" : "debit"
+        });
+        partyId = partyRes.data.id;
+        toast.success(`Party "${newPartyName}" create ho gayi!`);
+      }
+      
+      // Create transaction
       await axios.post(`${API}/transactions`, {
-        ...formData,
+        date: formData.date,
+        transaction_type: formData.transaction_type,
         amount: parseFloat(formData.amount),
-        party_id: formData.party_id || null
+        party_id: partyId || null,
+        payment_mode: formData.payment_mode,
+        category: formData.category || null,
+        description: formData.description
       });
-      toast.success("Transaction added!");
-      setShowModal(false);
-      setFormData({ date: selectedDate, party_id: "", transaction_type: "credit", amount: "", payment_mode: "cash", description: "" });
+      
+      toast.success(`${formData.transaction_type === 'credit' ? 'Credit' : 'Debit'} entry add ho gayi!`);
+      
+      // Reset form
+      setFormData({
+        date: format(new Date(), "yyyy-MM-dd"),
+        transaction_type: "credit",
+        amount: "",
+        party_id: "",
+        party_name: "",
+        payment_mode: "cash",
+        category: "",
+        description: ""
+      });
+      setShowNewPartyInput(false);
+      setNewPartyName("");
+      
       fetchData();
     } catch (error) {
-      toast.error("Failed to add transaction");
+      toast.error(error.response?.data?.detail || "Entry add nahi hui");
     }
   };
 
   const handleDelete = async (txnId) => {
-    if (!window.confirm("Delete this transaction?")) return;
+    if (!window.confirm("Delete this entry?")) return;
     try {
       await axios.delete(`${API}/transactions/${txnId}`);
-      toast.success("Transaction deleted!");
+      toast.success("Entry delete ho gayi!");
       fetchData();
     } catch (error) {
-      toast.error("Failed to delete");
+      toast.error("Delete nahi hua");
     }
   };
 
-  const handleSaveOB = async (e) => {
-    e.preventDefault();
-    try {
-      await axios.post(`${API}/cashbook/opening-balance?amount=${openingBalance.amount}&as_on_date=${openingBalance.as_on_date}`);
-      toast.success("Opening Balance saved!");
-      setShowOBModal(false);
-      fetchData();
-    } catch (err) {
-      toast.error("Failed to save");
-    }
+  const getPartyName = (partyId) => {
+    if (!partyId) return "-";
+    const party = parties.find(p => p.id === partyId);
+    return party?.name || "-";
   };
 
-  const paymentModeLabel = { cash: "Cash", upi: "UPI", bank_transfer: "Bank" };
-
-  if (loading) return <div className="text-center py-8">Loading...</div>;
+  const paymentModeLabels = { cash: "Cash", upi: "UPI", bank_transfer: "Bank" };
+  const categoryLabels = expenseCategories.reduce((acc, c) => { acc[c.value] = c.label; return acc; }, {});
 
   return (
     <div className="animate-fade-in" data-testid="cashbook-page">
-      <div className="action-bar">
-        <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
-          <PopoverTrigger asChild>
-            <button className="dropdown-trigger">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-              <span className="font-medium">{format(new Date(selectedDate), "dd MMM yyyy")}</span>
-            </button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0 bg-white rounded-lg shadow-lg" align="start">
-            <Calendar mode="single" selected={new Date(selectedDate)} onSelect={(date) => { if(date) { setSelectedDate(format(date, "yyyy-MM-dd")); setDatePickerOpen(false); }}} initialFocus />
-          </PopoverContent>
-        </Popover>
-
-        <button onClick={() => { setFormData({...formData, date: selectedDate}); setShowModal(true); }} className="action-btn success" data-testid="add-transaction-btn">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
-          Add Entry
-        </button>
-
-        <button onClick={() => setShowOBModal(true)} className="action-btn outline-primary" data-testid="set-opening-balance-btn">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-          Opening Balance
-        </button>
-      </div>
-
       {/* Summary Cards */}
       <div className="stats-row">
         <div className="stat-box">
           <div className="stat-box-label">Opening Balance</div>
-          <div className="stat-box-value primary">₹{cashbookData?.opening_balance?.toLocaleString('en-IN') || 0}</div>
+          <div className="stat-box-value primary">₹{summary.opening?.toLocaleString('en-IN')}</div>
         </div>
         <div className="stat-box">
           <div className="stat-box-label">Total Credit (Jama)</div>
-          <div className="stat-box-value success">₹{cashbookData?.total_credit?.toLocaleString('en-IN') || 0}</div>
+          <div className="stat-box-value success">₹{summary.credit?.toLocaleString('en-IN')}</div>
         </div>
         <div className="stat-box">
           <div className="stat-box-label">Total Debit (Udhar)</div>
-          <div className="stat-box-value danger">₹{cashbookData?.total_debit?.toLocaleString('en-IN') || 0}</div>
+          <div className="stat-box-value danger">₹{summary.debit?.toLocaleString('en-IN')}</div>
         </div>
         <div className="stat-box">
           <div className="stat-box-label">Closing Balance</div>
-          <div className={`stat-box-value ${(cashbookData?.closing_balance || 0) >= 0 ? 'success' : 'danger'}`}>
-            ₹{cashbookData?.closing_balance?.toLocaleString('en-IN') || 0}
+          <div className={`stat-box-value ${summary.closing >= 0 ? 'success' : 'danger'}`}>
+            ₹{summary.closing?.toLocaleString('en-IN')}
           </div>
         </div>
       </div>
 
-      {/* Transactions Table */}
-      <div className="data-card">
-        <div className="data-card-header">
-          <div className="data-card-title">Daily Cash Book - {format(new Date(selectedDate), "dd MMMM yyyy")}</div>
-        </div>
-        <div className="data-card-body p-0">
-          {!cashbookData?.transactions?.length ? (
-            <div className="text-center py-8 text-gray-500">
-              <p>No transactions for this day</p>
-              <button onClick={() => setShowModal(true)} className="btn btn-primary mt-3">Add First Entry</button>
+      {/* Main Content: Entry Form + Transactions */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        
+        {/* Left: Entry Form (Always Visible) */}
+        <div className="lg:col-span-1">
+          <div className="data-card sticky top-4">
+            <div className="data-card-header bg-gradient-to-r from-blue-500 to-purple-500">
+              <div className="data-card-title text-white">New Entry (नई एंट्री)</div>
             </div>
-          ) : (
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Time</th>
-                  <th>Description</th>
-                  <th>Party</th>
-                  <th>Mode</th>
-                  <th className="text-right text-green-600">Credit</th>
-                  <th className="text-right text-red-600">Debit</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {cashbookData.transactions.map((txn) => (
-                  <tr key={txn.id}>
-                    <td className="text-gray-500 text-sm">{txn.created_at ? format(new Date(txn.created_at), "HH:mm") : "-"}</td>
-                    <td className="font-medium">{txn.description}</td>
-                    <td>{parties.find(p => p.id === txn.party_id)?.name || "-"}</td>
-                    <td>
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${txn.payment_mode === 'cash' ? 'bg-green-100 text-green-700' : txn.payment_mode === 'upi' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                        {paymentModeLabel[txn.payment_mode]}
-                      </span>
-                    </td>
-                    <td className="text-right font-bold text-green-600">{txn.transaction_type === 'credit' ? `₹${txn.amount.toLocaleString('en-IN')}` : '-'}</td>
-                    <td className="text-right font-bold text-red-600">{txn.transaction_type === 'debit' ? `₹${txn.amount.toLocaleString('en-IN')}` : '-'}</td>
-                    <td>
-                      <button onClick={() => handleDelete(txn.id)} className="text-red-500 hover:text-red-700" title="Delete">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
-
-      {/* Add Transaction Modal */}
-      {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div className="modal-title">Add Cash Book Entry</div>
-              <button className="modal-close" onClick={() => setShowModal(false)}>&times;</button>
-            </div>
-            <form onSubmit={handleSubmit}>
-              <div className="modal-body">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="form-group">
-                    <label className="form-label">Type</label>
-                    <div className="flex gap-2">
-                      <button type="button" onClick={() => setFormData({...formData, transaction_type: "credit"})}
-                        className={`flex-1 py-2 px-3 rounded-lg font-medium transition ${formData.transaction_type === 'credit' ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-600'}`}>
-                        Credit (Jama)
-                      </button>
-                      <button type="button" onClick={() => setFormData({...formData, transaction_type: "debit"})}
-                        className={`flex-1 py-2 px-3 rounded-lg font-medium transition ${formData.transaction_type === 'debit' ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600'}`}>
-                        Debit (Udhar)
-                      </button>
-                    </div>
+            <div className="data-card-body">
+              <form onSubmit={handleSubmit}>
+                {/* Type Toggle */}
+                <div className="form-group">
+                  <div className="flex gap-2">
+                    <button 
+                      type="button" 
+                      onClick={() => setFormData({...formData, transaction_type: "credit"})}
+                      className={`flex-1 py-3 px-4 rounded-lg font-bold text-lg transition ${formData.transaction_type === 'credit' ? 'bg-green-500 text-white shadow-lg' : 'bg-gray-100 text-gray-600'}`}
+                    >
+                      + Credit (Jama)
+                    </button>
+                    <button 
+                      type="button" 
+                      onClick={() => setFormData({...formData, transaction_type: "debit"})}
+                      className={`flex-1 py-3 px-4 rounded-lg font-bold text-lg transition ${formData.transaction_type === 'debit' ? 'bg-red-500 text-white shadow-lg' : 'bg-gray-100 text-gray-600'}`}
+                    >
+                      - Debit (Udhar)
+                    </button>
                   </div>
+                </div>
+
+                {/* Amount */}
+                <div className="form-group">
+                  <label className="form-label">Amount (₹) *</label>
+                  <input 
+                    type="number" 
+                    className={`form-control text-2xl font-bold text-center ${formData.transaction_type === 'credit' ? 'text-green-600' : 'text-red-600'}`}
+                    value={formData.amount} 
+                    onChange={(e) => setFormData({...formData, amount: e.target.value})} 
+                    placeholder="0" 
+                    required 
+                    min="1"
+                  />
+                </div>
+
+                {/* Party Selection */}
+                <div className="form-group">
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="form-label mb-0">Party (पार्टी)</label>
+                    <button 
+                      type="button" 
+                      onClick={() => setShowNewPartyInput(!showNewPartyInput)}
+                      className="text-xs text-blue-600 hover:text-blue-800"
+                    >
+                      {showNewPartyInput ? "Select Existing" : "+ New Party"}
+                    </button>
+                  </div>
+                  
+                  {showNewPartyInput ? (
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      value={newPartyName}
+                      onChange={(e) => setNewPartyName(e.target.value)}
+                      placeholder="Enter new party name"
+                    />
+                  ) : (
+                    <select 
+                      className="form-control" 
+                      value={formData.party_id} 
+                      onChange={(e) => setFormData({...formData, party_id: e.target.value})}
+                    >
+                      <option value="">-- No Party --</option>
+                      {parties.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} (₹{Math.abs(p.current_balance || 0).toLocaleString('en-IN')} {(p.current_balance || 0) >= 0 ? 'DR' : 'CR'})
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                {/* Category (for expenses) */}
+                {formData.transaction_type === "debit" && (
                   <div className="form-group">
-                    <label className="form-label">Payment Mode</label>
-                    <select className="form-control" value={formData.payment_mode} onChange={(e) => setFormData({...formData, payment_mode: e.target.value})}>
-                      <option value="cash">Cash</option>
-                      <option value="upi">UPI</option>
-                      <option value="bank_transfer">Bank Transfer</option>
+                    <label className="form-label">Category (श्रेणी)</label>
+                    <select 
+                      className="form-control" 
+                      value={formData.category} 
+                      onChange={(e) => setFormData({...formData, category: e.target.value})}
+                    >
+                      {expenseCategories.map(cat => (
+                        <option key={cat.value} value={cat.value}>{cat.label}</option>
+                      ))}
                     </select>
                   </div>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Amount (₹)</label>
-                  <input type="number" className="form-control text-xl font-bold" value={formData.amount} onChange={(e) => setFormData({...formData, amount: e.target.value})} placeholder="Enter amount" required min="0" />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Party (Optional)</label>
-                  <select className="form-control" value={formData.party_id} onChange={(e) => setFormData({...formData, party_id: e.target.value})}>
-                    <option value="">-- No Party --</option>
-                    {parties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Description</label>
-                  <input type="text" className="form-control" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} placeholder="Enter description" required />
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary">Cancel</button>
-                <button type="submit" className={`btn ${formData.transaction_type === 'credit' ? 'btn-success' : 'btn-danger'}`}>
-                  Add {formData.transaction_type === 'credit' ? 'Credit' : 'Debit'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+                )}
 
-      {/* Opening Balance Modal */}
-      {showOBModal && (
-        <div className="modal-overlay" onClick={() => setShowOBModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div className="modal-title">Set Cash Opening Balance</div>
-              <button className="modal-close" onClick={() => setShowOBModal(false)}>&times;</button>
-            </div>
-            <form onSubmit={handleSaveOB}>
-              <div className="modal-body">
-                <div className="bg-blue-50 border-l-4 border-blue-400 p-3 mb-4">
-                  <p className="text-sm text-blue-700">
-                    <strong>Opening Balance</strong> woh cash amount hai jo Financial Year ke shuruwat me aapke paas thi. 
-                    Ye Balance Sheet me include hogi.
-                  </p>
-                </div>
+                {/* Payment Mode */}
                 <div className="form-group">
-                  <label className="form-label">As on Date (FY Start)</label>
+                  <label className="form-label">Payment Mode</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {['cash', 'upi', 'bank_transfer'].map(mode => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setFormData({...formData, payment_mode: mode})}
+                        className={`py-2 px-3 rounded-lg text-sm font-medium transition ${formData.payment_mode === mode ? 'bg-purple-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                      >
+                        {paymentModeLabels[mode]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Date */}
+                <div className="form-group">
+                  <label className="form-label">Date</label>
                   <input 
                     type="date" 
                     className="form-control" 
-                    value={openingBalance.as_on_date} 
-                    onChange={(e) => setOpeningBalance({...openingBalance, as_on_date: e.target.value})} 
+                    value={formData.date} 
+                    onChange={(e) => setFormData({...formData, date: e.target.value})} 
                   />
                 </div>
+
+                {/* Description */}
                 <div className="form-group">
-                  <label className="form-label">Opening Cash Balance (₹)</label>
+                  <label className="form-label">Description *</label>
                   <input 
-                    type="number" 
-                    className="form-control text-xl font-bold" 
-                    value={openingBalance.amount} 
-                    onChange={(e) => setOpeningBalance({...openingBalance, amount: parseFloat(e.target.value) || 0})} 
-                    placeholder="0" 
+                    type="text" 
+                    className="form-control" 
+                    value={formData.description} 
+                    onChange={(e) => setFormData({...formData, description: e.target.value})} 
+                    placeholder="Enter details"
+                    required
                   />
                 </div>
-              </div>
-              <div className="modal-footer">
-                <button type="button" onClick={() => setShowOBModal(false)} className="btn btn-secondary">Cancel</button>
-                <button type="submit" className="btn btn-success">Save</button>
-              </div>
-            </form>
+
+                {/* Submit Button */}
+                <button 
+                  type="submit" 
+                  className={`w-full py-3 rounded-lg font-bold text-lg text-white transition ${formData.transaction_type === 'credit' ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'}`}
+                >
+                  {formData.transaction_type === 'credit' ? '+ Add Credit Entry' : '- Add Debit Entry'}
+                </button>
+              </form>
+            </div>
           </div>
         </div>
-      )}
+
+        {/* Right: Transactions List */}
+        <div className="lg:col-span-2">
+          <div className="data-card">
+            <div className="data-card-header">
+              <div className="data-card-title">Transactions (लेन-देन)</div>
+              <div className="flex gap-2 items-center">
+                {/* Date Range Filter */}
+                <div className="flex bg-gray-100 rounded-lg p-1">
+                  {[
+                    { key: 'today', label: 'Today' },
+                    { key: 'week', label: 'Week' },
+                    { key: 'month', label: 'Month' }
+                  ].map(opt => (
+                    <button
+                      key={opt.key}
+                      onClick={() => setDateRange(opt.key)}
+                      className={`px-3 py-1 rounded-md text-sm font-medium transition ${dateRange === opt.key ? 'bg-white shadow text-blue-600' : 'text-gray-600'}`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                
+                {/* Date Picker */}
+                <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
+                  <PopoverTrigger asChild>
+                    <button className="dropdown-trigger">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      <span className="font-medium">{format(new Date(selectedDate), "dd MMM")}</span>
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0 bg-white rounded-lg shadow-lg" align="end">
+                    <Calendar 
+                      mode="single" 
+                      selected={new Date(selectedDate)} 
+                      onSelect={(date) => { if(date) { setSelectedDate(format(date, "yyyy-MM-dd")); setDatePickerOpen(false); }}} 
+                      initialFocus 
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
+            <div className="data-card-body p-0">
+              {loading ? (
+                <div className="text-center py-8">Loading...</div>
+              ) : transactions.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  <div className="text-4xl mb-2">📝</div>
+                  <p>No transactions for this period</p>
+                  <p className="text-sm">Add your first entry from the form</p>
+                </div>
+              ) : (
+                <div className="overflow-auto max-h-[600px]">
+                  <table className="data-table">
+                    <thead className="sticky top-0 bg-white">
+                      <tr>
+                        <th>Date</th>
+                        <th>Description</th>
+                        <th>Party</th>
+                        <th>Category</th>
+                        <th>Mode</th>
+                        <th className="text-right text-green-600">Credit</th>
+                        <th className="text-right text-red-600">Debit</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {transactions.map((txn) => (
+                        <tr key={txn.id} className="hover:bg-gray-50">
+                          <td className="text-gray-500 text-sm whitespace-nowrap">
+                            {format(new Date(txn.date), "dd-MM")}
+                            <div className="text-xs">{txn.created_at ? format(new Date(txn.created_at), "HH:mm") : ""}</div>
+                          </td>
+                          <td className="font-medium max-w-[200px] truncate" title={txn.description}>{txn.description}</td>
+                          <td className="text-sm">{getPartyName(txn.party_id)}</td>
+                          <td className="text-xs">
+                            {txn.category && (
+                              <span className="bg-gray-100 px-2 py-1 rounded">{categoryLabels[txn.category] || txn.category}</span>
+                            )}
+                          </td>
+                          <td>
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${txn.payment_mode === 'cash' ? 'bg-green-100 text-green-700' : txn.payment_mode === 'upi' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                              {paymentModeLabels[txn.payment_mode] || txn.payment_mode}
+                            </span>
+                          </td>
+                          <td className="text-right font-bold text-green-600">
+                            {txn.transaction_type === 'credit' ? `₹${txn.amount.toLocaleString('en-IN')}` : '-'}
+                          </td>
+                          <td className="text-right font-bold text-red-600">
+                            {txn.transaction_type === 'debit' ? `₹${txn.amount.toLocaleString('en-IN')}` : '-'}
+                          </td>
+                          <td>
+                            <button 
+                              onClick={() => handleDelete(txn.id)} 
+                              className="text-red-500 hover:text-red-700" 
+                              title="Delete"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Quick Stats by Category */}
+          {transactions.length > 0 && formData.transaction_type === "debit" && (
+            <div className="data-card mt-4">
+              <div className="data-card-header">
+                <div className="data-card-title">Expense by Category (खर्चा श्रेणी अनुसार)</div>
+              </div>
+              <div className="data-card-body">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {Object.entries(
+                    transactions
+                      .filter(t => t.transaction_type === 'debit' && t.category)
+                      .reduce((acc, t) => {
+                        acc[t.category] = (acc[t.category] || 0) + t.amount;
+                        return acc;
+                      }, {})
+                  ).map(([cat, amount]) => (
+                    <div key={cat} className="bg-gray-50 rounded-lg p-3">
+                      <div className="text-xs text-gray-500">{categoryLabels[cat] || cat}</div>
+                      <div className="text-lg font-bold text-red-600">₹{amount.toLocaleString('en-IN')}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 };
