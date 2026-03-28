@@ -69,8 +69,8 @@
 - `POST /api/chit-funds/{id}/lift` - Lift (auto Cash Book credit)
 
 ## Testing Status
-- Backend: 100% (9/9 hierarchical ledger tests - iteration 15)
-- Frontend: 100% (All features verified)
+- Backend: 100% (iteration 15)
+- Frontend: 100% (iteration 16 - all filters working)
 
 ## Implementation Complete (December 2025)
 
@@ -101,11 +101,15 @@
 - [x] **Custom Expense Categories** - Create/delete custom expense categories
 - [x] **Expenses Page in Navigation** - Now visible in main menu
 - [x] **Parent Ledger Aggregation** - Parent shows all sub-ledger transactions
-- [x] **Leaf Parties API** - Cash Book dropdown only shows leaf ledgers (no parents)
+- [x] **Leaf Parties API** - Cash Book entry form only shows leaf ledgers (no parents)
 - [x] **Auto-create Parent Ledgers:**
   - Staff → "Staff Advances" (Current Asset)
   - Chit Fund → "Chit Fund Investment" (Current Asset)
   - Interest/Byaj → "Byaj (Interest) Receivable" (Current Asset)
+- [x] **Cash Book Party Filter** - Filter transactions by party
+- [x] **Party Page Tabs:**
+  - "Ledger Master" - Shows only leaf ledgers with PARENT column
+  - "Parent Ledger" - Shows only parent ledgers with SUB-LEDGERS count
 
 ## Account Head System (New)
 Ledgers can now be categorized with Account Heads:
