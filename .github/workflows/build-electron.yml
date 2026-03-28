@@ -27,14 +27,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'yarn'
-          cache-dependency-path: |
-            frontend/yarn.lock
-            electron/yarn.lock
 
       - name: Install Frontend Dependencies
         working-directory: frontend
-        run: yarn install --frozen-lockfile
+        run: yarn install
 
       - name: Build React App
         working-directory: frontend
@@ -50,7 +46,7 @@ jobs:
 
       - name: Install Electron Dependencies
         working-directory: electron
-        run: yarn install --frozen-lockfile
+        run: yarn install
 
       - name: Build Windows Executable
         working-directory: electron
