@@ -141,9 +141,9 @@ class OpeningBalance(OpeningBalanceBase):
 # Models
 class StaffBase(BaseModel):
     name: str
-    phone: str
     joining_date: str
     monthly_salary: float
+    phone: Optional[str] = None  # Optional field
 
 class StaffCreate(StaffBase):
     pass

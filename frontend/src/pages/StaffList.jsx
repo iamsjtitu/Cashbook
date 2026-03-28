@@ -11,7 +11,7 @@ const StaffList = () => {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingStaff, setEditingStaff] = useState(null);
-  const [formData, setFormData] = useState({ name: "", phone: "", joining_date: "", monthly_salary: "" });
+  const [formData, setFormData] = useState({ name: "", joining_date: "", monthly_salary: "" });
   const [datePickerOpen, setDatePickerOpen] = useState(false);
 
   useEffect(() => { fetchStaff(); }, []);
@@ -40,7 +40,7 @@ const StaffList = () => {
       }
       setShowModal(false);
       setEditingStaff(null);
-      setFormData({ name: "", phone: "", joining_date: "", monthly_salary: "" });
+      setFormData({ name: "", joining_date: "", monthly_salary: "" });
       fetchStaff();
     } catch (error) {
       toast.error(editingStaff ? "Failed to update staff" : "Failed to add staff");
@@ -49,7 +49,7 @@ const StaffList = () => {
 
   const handleEdit = (staff) => {
     setEditingStaff(staff);
-    setFormData({ name: staff.name, phone: staff.phone, joining_date: staff.joining_date, monthly_salary: staff.monthly_salary.toString() });
+    setFormData({ name: staff.name, joining_date: staff.joining_date, monthly_salary: staff.monthly_salary.toString() });
     setShowModal(true);
   };
 
@@ -114,7 +114,6 @@ const StaffList = () => {
                 <tr>
                   <th>Sr.</th>
                   <th>Name</th>
-                  <th>Phone</th>
                   <th>Joining Date</th>
                   <th>Monthly Salary</th>
                   <th>Daily Rate</th>
@@ -131,7 +130,6 @@ const StaffList = () => {
                         <span className="font-medium">{staff.name}</span>
                       </div>
                     </td>
-                    <td>{staff.phone}</td>
                     <td>{staff.joining_date ? format(new Date(staff.joining_date), "dd-MM-yyyy") : "-"}</td>
                     <td className="font-semibold">₹{staff.monthly_salary.toLocaleString('en-IN')}</td>
                     <td className="text-gray-600">₹{(staff.monthly_salary / 30).toFixed(2)}</td>
@@ -166,10 +164,6 @@ const StaffList = () => {
                 <div className="form-group">
                   <label className="form-label">Name / नाम</label>
                   <input type="text" className="form-control" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} placeholder="Enter name" required data-testid="staff-name-input" />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Phone / फोन</label>
-                  <input type="tel" className="form-control" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} placeholder="Enter phone" required data-testid="staff-phone-input" />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Joining Date / तारीख</label>
